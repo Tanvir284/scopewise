@@ -1,0 +1,46 @@
+# Backend only. Creating this paid service requires separate operator approval.
+# Select this file as the Blueprint path; keep the repository root unchanged.
+services:
+  - type: web
+    name: scopewise-api
+    runtime: node
+    region: singapore
+    plan: 0.5c-512mb
+    numInstances: 1
+    autoDeployTrigger: off
+    buildCommand: >-
+      NODE_ENV=test SCOPEWISE_MODE=development PORT=
+      RENDER_EXTERNAL_URL= SCOPEWISE_PUBLIC_ORIGIN= SCOPEWISE_BACKEND_ORIGIN=
+      SCOPEWISE_WORK_DIR= SCOPEWISE_HOST= SCOPEWISE_PORT= SCOPEWISE_SERVE_FRONTEND=false
+      SCOPEWISE_SESSION_SECRET= SCOPEWISE_SESSION_SECRET_FILE= SCOPEWISE_PROXY_SECRET=
+      npm test
+    startCommand: node server.cjs
+    healthCheckPath: /health/live
+    maxShutdownDelaySeconds: 30
+    disk:
+      name: scopewise-work
+      mountPath: /opt/render/project/src/work
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 24.21.0
+      - key: NODE_ENV
+        value: production
+      - key: CI
+        value: "true"
+      - key: SCOPEWISE_MODE
+        value: production
+      - key: SCOPEWISE_HOST
+        value: 0.0.0.0
+      - key: SCOPEWISE_WORK_DIR
+        value: /opt/render/project/src/work
+      - key: SCOPEWISE_PUBLIC_ORIGIN
+        sync: false
+      - key: SCOPEWISE_SESSION_SECRET
+        generateValue: true
+      - key: SCOPEWISE_PROXY_SECRET
+        generateValue: true
+# Render supplies PORT and RENDER_EXTERNAL_URL. Do not override the backend
+# origin with the frontend URL. Do not enable replicas or production previews.
+# Keep both generated secrets private. Copy only the proxy secret to Vercel's
+# Production SCOPEWISE_PROXY_SECRET environment setting; never into source.

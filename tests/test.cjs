@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict');const {createPlan}=require('../public/planner.js');
+for(const [a,b] of [['','message'],['scope',''],['   ',' change '],['scope','\n\t']])assert.throws(()=>createPlan(a,b));
+const p=createPlan('Manual confirmation.','Remove manual confirmation. Add bKash payment. Send email alerts.');
+assert.equal(p.changes.length,3);assert.equal(p.changes[0].type,'Removal');assert.equal(p.tasks.length,3);assert(p.questions.some(q=>q.includes('payment provider')));assert(p.questions.some(q=>q.includes('notification')));
+assert.equal(p.tasks[1].title,'Implement requested payment flow');assert(!p.tasks[1].criteria.join(' ').includes('booking'));
+const booking=createPlan('Build a booking website.','Customers should now pay a 30% deposit through bKash before a booking is confirmed. Send an email confirmation after successful payment. Add a monthly booking report with CSV export for the admin. Remove manual booking confirmation.');
+assert.equal(booking.changes.length,4);assert.equal(booking.tasks.length,4);assert.equal(booking.questions.length,7);assert(booking.tasks[0].criteria.some(c=>c.includes('server verifies')));assert(booking.tasks[1].criteria.some(c=>c.includes('duplicate confirmations')));assert(booking.tasks[2].criteria.some(c=>c.includes('same filtered records')));assert.equal(booking.tasks[3].title,'Remove superseded behavior');
+const hostile=createPlan('<script>alert(1)</script>','Add <img src=x onerror=alert(1)>');assert.equal(hostile.tasks[0].description,'Add <img src=x onerror=alert(1)>');
+const multiline=createPlan(' Scope ','Add users\nAdd notifications\nAdd reports');assert.equal(multiline.original,'Scope');assert.equal(multiline.changes.length,3);assert(multiline.questions.some(q=>q.includes('roles')));assert(multiline.questions.some(q=>q.includes('notification')));
+console.log('Passed: empty/whitespace validation, extraction, classification, sample counts, domain criteria, generic payment context, plural keywords, source trimming, literal text preservation.');

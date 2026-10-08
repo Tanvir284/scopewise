@@ -1,0 +1,46 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "node --version",
+  "buildCommand": "node scripts/check-frontend.cjs",
+  "outputDirectory": "public",
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "https://scopewise-backend.example.invalid/api/$1",
+      "headers": {
+        "Cache-Control": "no-store",
+        "CDN-Cache-Control": "no-store",
+        "Vercel-CDN-Cache-Control": "no-store",
+        "x-vercel-enable-rewrite-caching": "0"
+      },
+      "transforms": [
+        {
+          "type": "request.headers",
+          "op": "set",
+          "target": {
+            "key": "x-scopewise-proxy"
+          },
+          "args": "$SCOPEWISE_PROXY_SECRET",
+          "env": [
+            "SCOPEWISE_PROXY_SECRET"
+          ]
+        }
+      ]
+    },
+    {
+      "src": "/(.*)",
+      "headers": {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "same-origin",
+        "Strict-Transport-Security": "max-age=31536000",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+      },
+      "continue": true
+    },
+    {
+      "handle": "filesystem"
+    }
+  ]
+}

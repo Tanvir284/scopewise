@@ -1,0 +1,14 @@
+{
+  "name": "scopewise-agency-workspace",
+  "version": "3.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.cjs",
+    "test": "node tests/test.cjs && node tests/workspace-test.cjs && node tests/storage-test.cjs && node tests/rules-test.cjs && node tests/server-client-test.cjs && node tests/operations-test.cjs && node tests/costing-test.cjs && node tests/backend-test.cjs && node tests/security-test.cjs && node tests/client-auth-test.cjs",
+    "test:operators": "node scripts/operator-check.cjs",
+    "check:frontend": "node scripts/check-frontend.cjs"
+  },
+  "engines": {
+    "node": ">=24.11.0 <25"
+  }
+}
