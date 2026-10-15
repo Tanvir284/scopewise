@@ -16,7 +16,15 @@ The current free plans support this commercial use. Their quotas can pause servi
 
 ## 1. Prepare source locally
 
-Open PowerShell in the Scopewise repository. Existing users must preserve work/ and their backups. A fresh installation can use:
+Open PowerShell in the Scopewise repository. Existing users must preserve work/ and their backups.
+
+For this prepared local checkout, GitHub publishing is still pending because the sandbox blocked Git credential access. Before importing from GitHub into Netlify, run this in your normal trusted PowerShell terminal:
+
+~~~powershell
+git push origin main
+~~~
+
+This publishes source only; it does not deploy the app. Fresh clones receive only already-published commits. After that push, a fresh installation can use:
 
 ~~~powershell
 git clone https://github.com/Tanvir284/scopewise.git

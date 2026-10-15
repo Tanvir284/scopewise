@@ -18,6 +18,10 @@ The original work/data/scopewise.sqlite SHA-256 remains 99d053539cf48ef7cbfc5171
 
 Source rollback archive: work/pre-zero-cost-source.zip. Pre-change database snapshots: work/backup-sets/pre-zero-cost/. All remain private and ignored by Git.
 
+## Source publishing status
+
+The implementation and guide are committed locally. GitHub push was attempted, but Windows sandbox restrictions prevented the Git credential helper from completing. Publishing was not verified. Run git push origin main in a normal trusted PowerShell terminal before importing this source from GitHub into Netlify. No hosting account or deployment was created.
+
 ## Remaining hosted acceptance
 
 Follow zero-cost-deployment.md to create the owned Free provider accounts, initialize/migrate PostgreSQL, provision an owner and set production environment values. Before real users, verify actual HTTPS/cookies, account roles and agency isolation, persistence across redeploy/idle suspension, and an independent restore into a new empty database. Check usage dashboards; Free quota exhaustion can pause service.
