@@ -2,14 +2,25 @@
 
 ## Live deployment — 15 October 2026
 
-The application is live at **[scopewise-tanvir284.netlify.app](https://scopewise-tanvir284.netlify.app)**. Netlify Free serves static pages and a Node 24 API Function; Neon Free PostgreSQL holds canonical authentication and agency data. Both provider dashboards showed Free plans. Netlify showed $0, 300 monthly credits, no saved payment card and no overage charges; only Netlify's payment-method page was checked. The configured production deploy used main commit e6957d4, deploy ID 6ad10d466adfc9707780c415. GitHub continuous deployment is connected to Tanvir284/scopewise main.
+The application is live at **[scopewise-tanvir284.netlify.app](https://scopewise-tanvir284.netlify.app)**. Netlify Free serves static pages and a Node 24 API Function; Neon Free PostgreSQL holds canonical authentication and agency data. Both provider dashboards showed Free plans. Netlify showed $0, 300 monthly credits, no saved payment card and no overage charges; only Netlify's payment-method page was checked. The latest published production deploy is 6ad10ff0a318f584b4e775b4 from main@6ebfbad39ef1eeaaa9d1e3ae7f66d16b24631cbe; its build took 10 seconds and included one Function. GitHub continuous deployment is connected to Tanvir284/scopewise main.
 
 - The actual HTTPS root, /health/live and /health/ready returned 200.
-- Owner browser sign-in, full page reload and session continuity passed. The retained costing page showed planned 300.38 BDT, actual 175.13 BDT and headroom 224.87 BDT. No captured browser warnings or errors occurred in that check.
+- Owner browser sign-in, full page reload and session continuity passed. A fresh browser tab after the third deploy restored the existing owner session and showed all three preserved projects with zero captured warnings or errors. The retained costing page showed planned 300.38 BDT, actual 175.13 BDT and headroom 224.87 BDT.
 - The owned Neon project uses PostgreSQL 18 in AWS Singapore. Its production branch showed expiration Never. Database and session secrets are marked as secret values in Netlify and limited to Production, with no fallback or preview values.
-- Netlify initially showed 300 included credits; two production deploys had been made at this checkpoint. Usage is metered, so this is not a statement of the remaining balance.
+- Netlify initially showed 300 included credits; three production deploys had been made at this checkpoint. Usage is metered, so this is not a statement of the remaining balance.
 
-Private browser screenshots and the real PostgreSQL acceptance report are retained in the local outputs directory. Hosted role/isolation checks and persistence after redeploy and idle suspension are pending below.
+Private browser screenshots, real PostgreSQL and hosted HTTPS acceptance reports, and the launch-backup verification report are retained in the local outputs directory.
+
+## Hosted HTTPS and persistence acceptance — 15 October 2026
+
+The final hosted run passed at 17:45:16 UTC using Node 24.11.0.
+
+- Public HTTPS, both health endpoints and the static publish boundary passed. Source/private paths were denied, and served configuration contained no actual credential values. Protected read endpoints returned 401 anonymously and API responses carried private, no-store.
+- Owner, editor, viewer and another-agency owner signed in. Session cookies used __Host-scopewise, Path=/, Secure, HttpOnly, SameSite=Strict and an eight-hour lifetime with no Domain; API HSTS was present.
+- Owner/editor saved synthetic project, task and cost records; editor deterministic planning worked. Viewer could read/export but could not save, plan or merge. Editor merge, missing CSRF and cross-origin writes were rejected; stale revisions returned 409. Rejected writes preserved the exact saved head.
+- Query, header and body agency selectors could not change server-selected ownership. The other agency remained empty, mixed cookie/session binding failed, and its owner could not plan against the first agency's project. Logout revoked the tested editor session.
+- After the production redeploy and more than eight minutes without our app or SQL requests, fresh owner/editor/viewer logins read the exact saved state, revision, saved timestamp, history and cost summary 593 seconds after the initial checkpoint. Neon provider UI showed a recent compute restart compared with the earlier start time. IDLE was not directly observed and that UI may have resumed compute; this establishes persistence after redeploy, a quiet interval and an observed compute restart, without establishing an app-first cold wake.
+- All disposable hosted QA agencies, accounts, dependent records and the private QA credentials/checkpoint file were removed. The original workspace, complete history, legacy data and artifacts matched the pre-test fingerprint.
 
 ## Local verification — 15 October 2026
 
@@ -39,21 +50,19 @@ The original work/data/scopewise.sqlite SHA-256 remains 99d053539cf48ef7cbfc5171
 
 The real Neon migration matches that retained backup exactly: raw workspace JSON, saved timestamp, revision 21, all 21 history records and import snapshots. The raw state SHA-256 is 2fd36da75ef9dceca093d3c83c80f48a200d8c60eeb1b872e433b6ffeca371a7. The workspace was explicitly assigned to the intended agency and an owner was provisioned. A complete initial live backup was exported privately to work/backups/neon-initial-2026-10-15.json before acceptance testing.
 
+The final launch export, work/backups/neon-launch-2026-10-15.json, was created at 17:45:45 UTC after QA cleanup. Bundle checksum validation passed and all seven canonical tables exactly match the initial export. Counts are one agency, one owner, one workspace, 21 revisions, one import, one legacy source and one artifact. The workspace retains revision 21, three projects and nine tasks; no temporary hosted acceptance fixtures remain, and retained labeled sample/QA records are preserved. Sessions are excluded by design. The backup file SHA-256 is fb4619507146cfb00e2104933b783c3363ec3bd176e6350b826a703a946ccb5a.
+
 Source rollback archive: work/pre-zero-cost-source.zip. Pre-change database snapshots: work/backup-sets/pre-zero-cost/. All remain private and ignored by Git.
 
 ## Source publishing status
 
-GitHub publishing succeeded on 15 October in [Tanvir284/scopewise](https://github.com/Tanvir284/scopewise). The published source includes the PostgreSQL implementation and deployment guide; the first configured live production deploy used e6957d4. Future pushes to main trigger Netlify production builds.
+GitHub publishing succeeded on 15 October in [Tanvir284/scopewise](https://github.com/Tanvir284/scopewise). The published source includes the PostgreSQL implementation and deployment guide; the first configured live production deploy used e6957d4 and the verified redeploy used 6ebfbad. Main is connected for continuous deployment.
 
-## Remaining hosted acceptance
+## Practical limits and ongoing operation
 
-The provider accounts, database migration, owner provisioning, production environment values, HTTPS access, owner browser session and independent real database restore are complete. The following checks are still pending at this documentation checkpoint:
+Setup and the documented launch acceptance are complete. The operator should retain independent backups and inspect both usage dashboards; Free quota exhaustion can pause service. Account and recovery instructions are in zero-cost-deployment.md.
 
-- Full hosted HTTP acceptance for cookies, role enforcement and separate-agency isolation.
-- Persistence and session behavior after a production redeploy and after Neon idle suspension.
-- Final launch backup after hosted acceptance and removal of its disposable fixtures.
-
-Check both usage dashboards during testing; Free quota exhaustion can pause service. The operator instructions are in zero-cost-deployment.md.
+These checks do not certify capacity, long-term uptime, every browser/accessibility combination or permanent Free availability. The quiet-interval observation above does not prove the app performed the first cold wake. Viewer access includes all agency costs, and there are no per-project permissions, public signup or password-reset emails. The hosted API limits remain 4 MiB per request and 5 MiB per response.
 
 ## Earlier SQLite and browser evidence — 9 October 2026
 

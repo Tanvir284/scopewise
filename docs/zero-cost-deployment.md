@@ -2,7 +2,7 @@
 
 Initial guide: 9 October 2026. Live deployment and provider settings checked on 15 October 2026.
 
-The existing installation is live at **[Scopewise](https://scopewise-tanvir284.netlify.app)**. Netlify builds the production branch, main, from [Tanvir284/scopewise](https://github.com/Tanvir284/scopewise). Both provider dashboards showed Free plans. Netlify showed $0, 300 monthly credits, no saved payment card and no overage charges; only Netlify's payment-method page was checked. HTTPS, liveness, readiness and owner browser sign-in passed. The original workspace, all 21 revisions and import snapshots were migrated exactly; real PostgreSQL concurrency, rollback and complete restore checks also passed. Hosted role/isolation checks and persistence across redeploy and idle suspension are still pending. See [verification](../docs/verification.md) for the evidence and remaining checks.
+The existing installation is live at **[Scopewise](https://scopewise-tanvir284.netlify.app)**. Netlify builds the production branch, main, from [Tanvir284/scopewise](https://github.com/Tanvir284/scopewise). Both provider dashboards showed Free plans. Netlify showed $0, 300 monthly credits, no saved payment card and no overage charges; only Netlify's payment-method page was checked. HTTPS, owner browser access, hosted roles and agency isolation passed. The original workspace, all 21 revisions and import snapshots were migrated exactly. Real PostgreSQL concurrency, rollback, complete restore, and persistence after redeploy and a quiet interval passed. A final launch backup was verified after removing temporary test records. See [verification](../docs/verification.md) for the evidence and practical limits.
 
 For this installation, setup steps 1–5 are already complete. Use sections 7–8 for accounts and backups; use the setup steps when rebuilding or creating a separate installation.
 
@@ -144,7 +144,9 @@ Preview contexts and mismatched origins are rejected before database connection.
 
 On 15 October, the deployed HTTPS root and both health endpoints returned 200. Owner browser sign-in worked, and retained costing showed planned 300.38 BDT, actual 175.13 BDT and headroom 224.87 BDT. A separate real Neon acceptance run verified authorized TLS 1.3, simultaneous transactions from distinct PostgreSQL backends, one-winner compare-and-save, rollback after an injected SQL fault, and complete export/restore into a new empty database. Temporary test resources were removed and the original data stayed unchanged.
 
-Hosted role/isolation checks and persistence after redeploy and idle suspension remain pending. The local PGlite suite complements these checks but uses a serial connection shim. Passing acceptance does not establish long-term uptime or workload capacity. See [verification](../docs/verification.md).
+The hosted HTTP suite passed secure cookie, anonymous denial, owner/editor save and planning, viewer restrictions, CSRF/origin/revision guards, logout and separate-agency isolation checks. Fresh logins recovered the exact saved workspace, history and cost summary 593 seconds after the checkpoint, after production redeploy 6ad10ff0a318f584b4e775b4 from main@6ebfbad39ef1eeaaa9d1e3ae7f66d16b24631cbe and more than eight minutes without our app or SQL requests. Neon showed a recent compute restart. IDLE was not directly observed and opening the provider UI may have resumed compute, so this does not establish an app-first cold wake. Disposable test resources were removed and original records stayed unchanged.
+
+The local PGlite suite complements these checks but uses a serial connection shim. Passing acceptance does not establish long-term uptime or workload capacity. See [verification](../docs/verification.md).
 
 ## 7. Manage users from your trusted computer
 
@@ -163,6 +165,8 @@ Use actual IDs. Reset/role/revoke operations invalidate sessions. The last activ
 All roles see their whole agency. There are no per-project/field permissions or invitation/password-reset emails. Planning team records are separate from sign-in accounts. Scopewise owners do not receive provider/database credentials.
 
 ## 8. Back up and recover
+
+The existing installation has a complete launch export at work/backups/neon-launch-2026-10-15.json, created at 17:45:45 UTC after acceptance cleanup. Its checksum passed and all seven canonical tables exactly match the initial live export: one agency, one owner, one workspace at revision 21, all history/imports, one legacy source and one artifact. No temporary hosted acceptance fixtures remain; retained labeled sample/QA records are preserved. The initial live export and original SQLite backups are also preserved privately.
 
 Export regularly and before source/schema changes, using a new dated filename:
 
