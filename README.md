@@ -24,7 +24,7 @@ Scopewise keeps those records together. Paste the new request, review a rule-bas
 
 Agency owners can review delivery and internal spending. Sales teams can keep opportunities, proposals and client price drafts alongside projects. Delivery coordinators and HR colleagues can plan people and capacity. Developers can work from tasks, acceptance criteria and the client message that prompted them. Everyone uses the same project story.
 
-**Current status:** [Scopewise is live](https://scopewise-tanvir284.netlify.app) on Netlify Free with a Node 24 API Function and Neon Free PostgreSQL. Sign-in requires an account supplied by the deployment operator. Hosted access, agency isolation, persistence after redeploy and a quiet interval, and real database recovery checks passed on 15 October 2026. See [verification](docs/verification.md) for evidence and practical limits. No Docker setup is required.
+**Current status:** [Scopewise is live](https://scopewise-tanvir284.netlify.app) on Netlify Free with a Node 24 API Function and Neon Free PostgreSQL. Sign-in requires an account supplied by the deployment operator. Hosted access, agency isolation, persistence after redeploy and a quiet interval, and real database recovery checks passed on 15 October 2026. The [16 October QA pass](docs/qa-2026-10-16.md) adds fixes, connected-feature checks, browser tests and bounded pressure results. See [verification](docs/verification.md) for evidence and practical limits. No Docker setup is required.
 
 ## Follow one project from request to delivery
 

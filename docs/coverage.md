@@ -1,25 +1,21 @@
-# Current authenticated deployment coverage
+# Current Scopewise coverage
 
-Authenticated agency storage, server roles, bound read/write tokens and session races are covered by tests/security-test.cjs and tests/client-auth-test.cjs. Native operator snapshot/restore/provisioning/adoption has a separate ten-case gate. Vercel/Render configuration is prepared; real provider cookies, TLS, persistent-disk restart and off-host recovery remain pending. See verification.md and deployment.md for precise evidence. The earlier feature map below is historical local coverage, not hosted acceptance.
-# Scope and evidence map
-
-Scopewise is a local agency prototype with 48 traceable rules (30 domain, 18 review) and 12 operations collections. CostPlans and expenses extend the original ten collections. Existing records and absent historical rates survive normalization.
+Scopewise is an authenticated agency workspace on Netlify Free and Neon Free PostgreSQL. The latest comprehensive pass is [QA — 16 October 2026](qa-2026-10-16.md). Earlier real database and recovery evidence is in [verification](verification.md).
 
 | Surface | Connected behavior and evidence |
 | --- | --- |
-| Home/projects | Real featured project, horizontal project/workflow/task shelves, card navigation, details and linked cost summary; desktop and mobile browser checks. |
-| Requirements/rules | Source snapshots, deterministic drafts, linked tasks/criteria/questions and rule evidence; 19 rule scenarios, 48 configured rules, keyboard review tabs and current route inspection. |
-| Task/delivery/issues | Board/list, manual statuses, estimates, person/sprint links, milestones and issue tracking; model/HTTP checks and retained actual linked QA records. |
-| Team/time | Explicit person defaults and saved time-rate snapshots; 90-minute actual UI entry, rate-edit preservation, exact-cost and nullable-pair tests. |
-| Project costing | Manual labor/expense plans, optional cap, actual expenses, known totals, coverage, signed remaining/variance, per-currency groups and report copy/export; 24 focused tests and actual browser QA. |
-| Commercial work/CRM | Selling estimates, invoice drafts, opportunity/proposal records with independent currencies; original QA amounts retained and final redesigned routes inspected. |
-| Reports/search/settings | Recorded delivery/commercial metrics, costing link, record-name search, defaults, JSON backup/merge and recovery; mobile settings overflow repaired and rechecked. |
-| Persistence | SQLite snapshots/revisions, rejected stale writes, migration replay across schema expansion and protected pending drafts; 12 transport cases, backend tests and exact live restart preservation at the retained revision. |
+| Home/projects/clients | Manual creation/linking, separate agency views, preserved original data, route/search checks. |
+| Requirements/48 rules | Source snapshots, negative constraints, linked tasks/criteria/questions, approval preserving baseline; 19 rules and 11 cross-module scenarios. |
+| Tasks/delivery/issues | Assignments/effort, sprint goal, reached milestone and resolved issue; actual browser edits agree with saved state and reports. |
+| Team/time | Rate snapshots, manual 90-minute entry, old-rate preservation, exact rounding and filtered CSV regression. |
+| Internal costing | Plans/caps, actual expenses, incomplete labor and currency groups; 24 focused tests plus browser/hosted cost assertions. |
+| Finance/CRM | Independent estimates/invoice drafts, exact rounding, recorded currencies, won/declined status totals, real download and safe export regression. |
+| Reports/search | Per-project/person/currency agreement, declined proposals excluded, actual linked-task search. |
+| Settings/backups | Actual JSON download matches hosted state; API conflict/replay/import checks. Browser upload completion blocked by extension file permission. |
+| Authentication/security | Owner/editor/viewer, CSRF/Origin/token binding, credential races, in-flight revocation, logout and agency isolation. |
+| Persistence/recovery | Ordered 500-save queue, explicit conflicts, malformed-journal recovery, read-only dialogs, history consistency, local restart and validated production backup. |
+| Responsive routes | All 16 routes at 320/390 viewport overrides without document-wide overflow; representative visual checks in Windows Chrome. |
 
-All 16 main navigation routes loaded at desktop size. Their 320px width checks found a settings overflow, which was repaired and rechecked. Representative home, costing, project/change details, task board, CRM, finance and forms were visually inspected. Shelves and navigation were exercised by both buttons and keyboard.
+All 15 script suites passed after core fixes. The final isolated export correction passed seven UI regressions and static/deployment checks. Operator gate: 10 cases. Bounded local load: 7 groups, 348 requests, up to 12 concurrent mixed operations. The full report records exact commit/test sequencing and one unreadable response with successful recovery.
 
-Eight npm suites pass: retained planner, workspace, storage, rules, server client, operations, costing and backend. The separate four-case delayed clipboard regression also passes. Independent read-only UI/model checks cover zero-only currency groups, incomplete comparisons and current-record export.
-
-Actual browser cost report clipboard contents were inspected. Fresh browser downloads of the latest export formats were not requested; report-generation code and current report text have verification evidence. Broader earlier creation/export checks remain historical.
-
-This evidence does not establish every browser engine, screen reader, storage exhaustion case, language construction or production workload. No AI provider, authenticated collaboration, cloud sync, real client notification, payment execution or automatic accounting is implemented. See verification.md and project-costing.md.
+This does not establish every browser/OS, physical device, assistive technology, every UI control, unlimited load, long-duration soak or provider availability. Planning requires human review; commercial records do not send messages, execute payments, convert currencies or perform automatic accounting.

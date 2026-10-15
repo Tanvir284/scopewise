@@ -1,8 +1,12 @@
 # Scopewise verification
 
+## Comprehensive QA — 16 October 2026
+
+See [the current QA report](qa-2026-10-16.md) for fixes, 15 passing script suites, seven final UI regressions, 10 operator checks, 348-request local pressure, 11-group real hosted acceptance, responsive routes and explicit limitations. The deployed source is `cbffdef04ea54594dc18a8d7b816c4eb796a24cd`; all six changed public assets exactly matched it over HTTPS. Temporary agencies were removed and all seven original data tables plus the original SQLite bytes were unchanged. A fresh validated private backup was created. The following 15 October sections retain historical launch evidence.
+
 ## Live deployment — 15 October 2026
 
-The application is live at **[scopewise-tanvir284.netlify.app](https://scopewise-tanvir284.netlify.app)**. Netlify Free serves static pages and a Node 24 API Function; Neon Free PostgreSQL holds canonical authentication and agency data. Both provider dashboards showed Free plans. Netlify showed $0, 300 monthly credits, no saved payment card and no overage charges; only Netlify's payment-method page was checked. The latest published production deploy is 6ad10ff0a318f584b4e775b4 from main@6ebfbad39ef1eeaaa9d1e3ae7f66d16b24631cbe; its build took 10 seconds and included one Function. GitHub continuous deployment is connected to Tanvir284/scopewise main.
+The application is live at **[scopewise-tanvir284.netlify.app](https://scopewise-tanvir284.netlify.app)**. Netlify Free serves static pages and a Node 24 API Function; Neon Free PostgreSQL holds canonical authentication and agency data. Both provider dashboards showed Free plans. Netlify showed $0, 300 monthly credits, no saved payment card and no overage charges; only Netlify's payment-method page was checked. At that launch checkpoint, the published production deploy was 6ad10ff0a318f584b4e775b4 from main@6ebfbad39ef1eeaaa9d1e3ae7f66d16b24631cbe; its build took 10 seconds and included one Function. GitHub continuous deployment is connected to Tanvir284/scopewise main.
 
 - The actual HTTPS root, /health/live and /health/ready returned 200.
 - Owner browser sign-in, full page reload and session continuity passed. A fresh browser tab after the third deploy restored the existing owner session and showed all three preserved projects with zero captured warnings or errors. The retained costing page showed planned 300.38 BDT, actual 175.13 BDT and headroom 224.87 BDT.
