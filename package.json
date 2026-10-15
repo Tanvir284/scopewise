@@ -6,10 +6,11 @@
     "start": "node server.cjs",
     "test": "npm run test:core && npm run test:postgres",
     "test:operators": "node scripts/operator-check.cjs",
+    "test:load": "node tests/load-test.cjs",
     "check:frontend": "node scripts/check-frontend.cjs",
     "test:postgres": "node tests/postgres-test.cjs",
     "check:netlify": "node scripts/check-netlify.cjs",
-    "test:core": "node tests/test.cjs && node tests/workspace-test.cjs && node tests/storage-test.cjs && node tests/rules-test.cjs && node tests/server-client-test.cjs && node tests/operations-test.cjs && node tests/costing-test.cjs && node tests/backend-test.cjs && node tests/security-test.cjs && node tests/client-auth-test.cjs"
+    "test:core": "node tests/test.cjs && node tests/workspace-test.cjs && node tests/storage-test.cjs && node tests/rules-test.cjs && node tests/server-client-test.cjs && node tests/operations-test.cjs && node tests/costing-test.cjs && node tests/model-integration-test.cjs && node tests/backend-test.cjs && node tests/security-test.cjs && node tests/auth-race-test.cjs && node tests/client-auth-test.cjs && node tests/clipboard-test.cjs && node tests/workspace-ui-test.cjs"
   },
   "engines": {
     "node": ">=24.11.0 <25"

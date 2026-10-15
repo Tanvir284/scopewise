@@ -190,7 +190,11 @@ function createApp(options={}){
   if(backend){const store=backend.workspace(id,authorization);await store.ensureInitialized(user.agency.name);return store;}
   recentLocalAgencies.delete(id);recentLocalAgencies.add(id);if(recentLocalAgencies.size>32)recentLocalAgencies.delete(recentLocalAgencies.values().next().value);
   const base=config.workRelative+'/tenants/'+id,store=createStore(base+'/scopewise.sqlite',base+'/backups');
-  try{if(!store.read().state)store.save(emptyWorkspace(user.agency.name),0,'Agency workspace initialized');return store;}catch(error){store.close();throw error;}
+  const run=(permissions,operation)=>auth.withSession({...authorization,agencyId:id},permissions,operation);
+  try{
+   run({},()=>{if(!store.read().state)store.save(emptyWorkspace(user.agency.name),0,'Agency workspace initialized');});
+   return {...store,read:(options={})=>run({write:options.write},()=>store.read()),save:(...args)=>run({write:true},()=>store.save(...args)),migrate:(...args)=>run({write:true,owner:true},()=>store.migrate(...args)),history:()=>run({},()=>store.history())};
+  }catch(error){store.close();throw error;}
  }
  function cookies(req){const raw=req.headers.cookie||'';if(raw.length>8192)return null;const name=config.secureCookies?'__Host-scopewise':'scopewise_session';const matches=raw.split(';').map(x=>x.trim()).filter(x=>x.startsWith(name+'='));if(matches.length!==1)return null;return matches[0].slice(name.length+1);}
  function setCookie(res,token,remove=false){res.setHeader('Set-Cookie',(config.secureCookies?'__Host-scopewise':'scopewise_session')+'='+(remove?'':token)+'; Path=/; HttpOnly; SameSite=Strict; Max-Age='+(remove?'0':'28800')+(config.secureCookies?'; Secure':''));}

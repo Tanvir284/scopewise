@@ -113,6 +113,16 @@ function responseCapture(){let status=200,body;const headers={};return {res:{hea
   const largeApp={ready:async()=>{},close:async()=>{},handler:async(_req,res)=>{res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({data:'x'.repeat(5*1024*1024)}));}};
   const r=await createFunction({env,app:largeApp})(new Request(env.SCOPEWISE_PUBLIC_ORIGIN+'/api/workspace'),context);assert.equal(r.status,413);assert.equal((await r.json()).code,'RESPONSE_TOO_LARGE');
  });
+ await group('A near-limit valid workspace round trips through the actual Function with costs unchanged',async()=>{
+  const before=await store.read(),large=clone(before.state);
+  for(let i=0;i<170;i++)large.clients.push({id:'large-client-'+i,name:'Large fixture '+i,contact:'',email:'',notes:'x'.repeat(23500)});
+  const body={state:large,revision:before.revision},bytes=Buffer.byteLength(JSON.stringify(body));assert(bytes>3.8*1024*1024&&bytes<4*1024*1024);
+  const saved=await call('/api/workspace','PUT',body,o);assert.equal(saved.status,200);assert.equal(saved.data.revision,before.revision+1);
+  const read=await call('/api/workspace','GET',undefined,o);assert.equal(read.status,200);assert.deepEqual(read.data.state,large);assert.deepEqual(Ops.costing(read.data.state,'project-1'),Ops.costing(before.state,'project-1'));
+  const oversized=clone(large);oversized.clients.push(...Array.from({length:10},(_,i)=>({id:'over-limit-client-'+i,name:'Excess fixture',contact:'',email:'',notes:'x'.repeat(23500)})));
+  assert.equal((await call('/api/workspace','PUT',{state:oversized,revision:read.data.revision},o)).status,413);assert.deepEqual((await store.read()).state,large);
+  assert.equal((await call('/api/workspace','PUT',{state:before.state,revision:read.data.revision},o)).status,200);
+ });
  await group('Postgres portable restore preserves all data and passwords; sessions stay revoked',async()=>{
   const exported=await T.exportPostgres(pg),target=await memoryBackend();assert(!Object.hasOwn(exported.data,'sessions'));const restored=await T.importPostgres(target,exported);assert.equal(restored.sessionsRestored,false);
   assert.deepEqual(await target.workspace(A.id).read(),await store.read());assert.deepEqual(await target.workspace(A.id).history(),await store.history());assert.equal((await target.auth.authenticate('pg-owner',password)).id,owner.id);assert.equal(await target.auth.getSession(o.cookie.split('=')[1]),null);
