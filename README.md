@@ -8,7 +8,7 @@ A shared agency workspace for project scope, tasks, people, time and internal co
 
 **Version 3.0** · **48 explainable planning rules** · **No AI provider or API key**
 
-[Take the tour](#follow-one-project-from-request-to-delivery) · [See what connects](#one-workspace-connected-records) · [Run it locally](#run-your-own-workspace) · [Deployment](#put-it-online)
+[Open Scopewise](https://scopewise-tanvir284.netlify.app) · [Take the tour](#follow-one-project-from-request-to-delivery) · [See what connects](#one-workspace-connected-records) · [Run it locally](#run-your-own-workspace) · [Deployment](#put-it-online)
 
 <img src="docs/assets/home.jpg" width="1100" alt="Scopewise home with a featured Harbor Studio booking project and two synthetic demo project cards">
 
@@ -24,7 +24,7 @@ Scopewise keeps those records together. Paste the new request, review a rule-bas
 
 Agency owners can review delivery and internal spending. Sales teams can keep opportunities, proposals and client price drafts alongside projects. Delivery coordinators and HR colleagues can plan people and capacity. Developers can work from tasks, acceptance criteria and the client message that prompted them. Everyone uses the same project story.
 
-**Current status:** source is available in this repository and the app has been checked locally. Public hosting has not been deployed or verified. The selected $0 hosting design is Netlify Free with a Node 24 API Function and Neon Free PostgreSQL. No Docker setup is required.
+**Current status:** [Scopewise is live](https://scopewise-tanvir284.netlify.app) on Netlify Free with a Node 24 API Function and Neon Free PostgreSQL. Sign-in requires an account supplied by the deployment operator. HTTPS, health endpoints, owner browser access and real database recovery checks passed on 15 October 2026; remaining hosted acceptance is tracked in [verification](docs/verification.md). No Docker setup is required.
 
 ## Follow one project from request to delivery
 
@@ -235,9 +235,9 @@ flowchart TD
     P --> W["Agency workspaces, revisions and import snapshots"]
 ~~~
 
-*Source and configuration are prepared. A public hosted application has not been deployed or verified.*
+*[The live installation](https://scopewise-tanvir284.netlify.app) deploys from this repository's main branch. Its existing records and revision history are stored in Neon.*
 
-Follow the **[step-by-step free deployment guide](docs/zero-cost-deployment.md)** to create provider accounts, preserve SQLite records, initialize PostgreSQL, provision users and configure Netlify.
+Use the **[step-by-step free deployment guide](docs/zero-cost-deployment.md)** to operate the live installation or create your own, preserve SQLite records, provision users and configure backups.
 
 Netlify currently provides 300 shared credits/month. Neon provides 1 GB/project (20 GB/account total), 100 CU-hours/project/month and 5 GB database egress/project/month. Either provider can pause at its quota. The guide explains current commercial eligibility, limits, backups and recovery with official sources. Continuous uptime and permanent free service are not guaranteed.
 

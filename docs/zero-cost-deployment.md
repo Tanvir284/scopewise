@@ -1,6 +1,10 @@
 # Scopewise: $0 deployment with Netlify and Neon
 
-Initial guide: 9 October 2026. Free-plan quotas and environment guidance rechecked on 15 October 2026. Source is published on GitHub. Live setup is in progress; hosted acceptance remains pending.
+Initial guide: 9 October 2026. Live deployment and provider settings checked on 15 October 2026.
+
+The existing installation is live at **[Scopewise](https://scopewise-tanvir284.netlify.app)**. Netlify builds the production branch, main, from [Tanvir284/scopewise](https://github.com/Tanvir284/scopewise). Both provider dashboards showed Free plans. Netlify showed $0, 300 monthly credits, no saved payment card and no overage charges; only Netlify's payment-method page was checked. HTTPS, liveness, readiness and owner browser sign-in passed. The original workspace, all 21 revisions and import snapshots were migrated exactly; real PostgreSQL concurrency, rollback and complete restore checks also passed. Hosted role/isolation checks and persistence across redeploy and idle suspension are still pending. See [verification](../docs/verification.md) for the evidence and remaining checks.
+
+For this installation, setup steps 1–5 are already complete. Use sections 7–8 for accounts and backups; use the setup steps when rebuilding or creating a separate installation.
 
 Use standard Netlify Free for static pages and a Node 24 API Function, and an owned Neon Free PostgreSQL database. Accounts, password hashes, sessions, login throttles, agency records, revision history and import snapshots persist in PostgreSQL. Function restarts do not erase canonical data.
 
@@ -35,7 +39,7 @@ Use Node 24.11 or later within 24.x. npm works instead of npm.cmd on other shell
 
 1. Sign in to [Neon](https://console.neon.tech/) and select standard Free.
 2. Create one Scopewise project. Use its owned default production root branch/database. Avoid unclaimed temporary databases or expiring preview branches.
-3. Choose an available US AWS region near Netlify's default Ohio Function region. Leave compute at the smallest available size, normally 0.25 CU, with idle suspension enabled.
+3. Choose an available region. For a new installation, prefer one close to the Function region to reduce database latency; Netlify's default Function region is Ohio. The existing Scopewise project uses AWS Singapore, PostgreSQL 18 and an owned production branch with expiration set to Never. It is live and does not need to be recreated. Leave compute at the smallest available size, normally 0.25 CU, with idle suspension enabled.
 4. Open Connect, select the database/owner role and enable connection pooling. Privately copy the PostgreSQL URL with its -pooler hostname and sslmode=require, optionally channel_binding=require.
 5. Create work/neon.env in a private editor:
 
@@ -115,7 +119,9 @@ Privately open that file and copy its single value to Netlify below. Keep a priv
 | SCOPEWISE_PUBLIC_ORIGIN | Exact production origin, e.g. https://your-project.netlify.app, no path/query |
 | AWS_LAMBDA_JS_RUNTIME | nodejs24.x |
 
-On standard Free, leave scopes at All; a Functions-only scope selector requires a paid plan. Set contextual values for Production only, with no all-context fallback or preview values. Production build code can therefore access these credentials: trust the production branch and its build scripts. Do not expose them to untrusted preview builds. Runtime variables belong in the UI/CLI/API, not public code or netlify.toml. AWS_LAMBDA_JS_RUNTIME requires a redeploy. [Runtime environment variables](https://docs.netlify.com/build/functions/environment-variables/), [Node runtime configuration](https://docs.netlify.com/build/functions/configuration/)
+The actual Free dashboard supports **Contains secret values**. Enable it for DATABASE_URL and SCOPEWISE_SESSION_SECRET. It automatically uses Builds, Functions and Runtime, excludes post-processing, and keeps the scope controls locked on Free. Give both secrets a Production value only: no all-context fallback and no preview, branch, agent or local-development values. Set SCOPEWISE_STORAGE and SCOPEWISE_PUBLIC_ORIGIN to Production only with all scopes. AWS_LAMBDA_JS_RUNTIME is not a secret and may use nodejs24.x for all contexts.
+
+Production build code can access the two secrets, so trust the production branch and its build scripts. Runtime values belong in the provider settings, not public code or netlify.toml. AWS_LAMBDA_JS_RUNTIME requires a redeploy. [Runtime environment variables](https://docs.netlify.com/build/functions/environment-variables/), [Node runtime configuration](https://docs.netlify.com/build/functions/configuration/)
 
 Leave SCOPEWISE_PROXY_SECRET, SCOPEWISE_BACKEND_ORIGIN, RENDER_EXTERNAL_URL and SCOPEWISE_SESSION_SECRET_FILE unset on this deployment.
 
@@ -136,7 +142,9 @@ Preview contexts and mismatched origins are rejected before database connection.
 7. Export the database and rehearse restore to a separate empty database.
 8. Check both provider usage dashboards and stop test activity near quota.
 
-The local PostgreSQL tests use actual PostgreSQL SQL through PGlite and test transaction rollback, API roles and recovery. Their serial connection shim cannot establish real multi-client locking, hosted TLS, Netlify routing/cookies or capacity. Those require this acceptance run. No hosted deployment has been performed.
+On 15 October, the deployed HTTPS root and both health endpoints returned 200. Owner browser sign-in worked, and retained costing showed planned 300.38 BDT, actual 175.13 BDT and headroom 224.87 BDT. A separate real Neon acceptance run verified authorized TLS 1.3, simultaneous transactions from distinct PostgreSQL backends, one-winner compare-and-save, rollback after an injected SQL fault, and complete export/restore into a new empty database. Temporary test resources were removed and the original data stayed unchanged.
+
+Hosted role/isolation checks and persistence after redeploy and idle suspension remain pending. The local PGlite suite complements these checks but uses a serial connection shim. Passing acceptance does not establish long-term uptime or workload capacity. See [verification](../docs/verification.md).
 
 ## 7. Manage users from your trusted computer
 

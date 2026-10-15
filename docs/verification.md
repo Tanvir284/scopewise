@@ -1,30 +1,59 @@
 # Scopewise verification
 
-## Current deployment preparation — 15 October 2026
+## Live deployment — 15 October 2026
 
-The selected setup is Netlify Free static hosting plus a Node 24 API Function, with Neon Free PostgreSQL holding all canonical authentication and agency data. Source is published on GitHub. Live setup is in progress; the application has not yet been deployed and hosted acceptance remains pending.
+The application is live at **[scopewise-tanvir284.netlify.app](https://scopewise-tanvir284.netlify.app)**. Netlify Free serves static pages and a Node 24 API Function; Neon Free PostgreSQL holds canonical authentication and agency data. Both provider dashboards showed Free plans. Netlify showed $0, 300 monthly credits, no saved payment card and no overage charges; only Netlify's payment-method page was checked. The configured production deploy used main commit e6957d4, deploy ID 6ad10d466adfc9707780c415. GitHub continuous deployment is connected to Tanvir284/scopewise main.
+
+- The actual HTTPS root, /health/live and /health/ready returned 200.
+- Owner browser sign-in, full page reload and session continuity passed. The retained costing page showed planned 300.38 BDT, actual 175.13 BDT and headroom 224.87 BDT. No captured browser warnings or errors occurred in that check.
+- The owned Neon project uses PostgreSQL 18 in AWS Singapore. Its production branch showed expiration Never. Database and session secrets are marked as secret values in Netlify and limited to Production, with no fallback or preview values.
+- Netlify initially showed 300 included credits; two production deploys had been made at this checkpoint. Usage is metered, so this is not a statement of the remaining balance.
+
+Private browser screenshots and the real PostgreSQL acceptance report are retained in the local outputs directory. Hosted role/isolation checks and persistence after redeploy and idle suspension are pending below.
+
+## Local verification — 15 October 2026
 
 - npm test passed all eleven suites on Node 24.11.0 after network access was enabled for the loopback HTTP tests.
 - The PostgreSQL/serverless suite passed thirteen groups: verified-TLS URL controls; compare-and-save revisions and atomic rollback; ID/relationship import conflicts with retained snapshots; completed replay and damaged historical-ledger handling; size limits; passwords/credential races/expiry/throttling/last-owner/readiness; Function startup and preview rejection; HTTP roles/CSRF/cookies/costs/isolation; revocation during upload; payload caps; PostgreSQL export/restore; SQLite cutover and explicit legacy adoption; fresh application-instance persistence.
 - PGlite runs PostgreSQL SQL locally through a serial connection shim. It verifies schema, transaction rollback and application behavior; it cannot verify real multi-client locks, hosted TLS, provider uptime or capacity.
-- Netlify zip-it-and-ship-it 16.3.0 built the actual Node 24 Function package. A smoke test confirmed its pg dependency resolves within the artifact, its module imports, its API/health routes are present, and DB-free liveness plus preview/config rejection work. No bundle was uploaded.
+- Netlify zip-it-and-ship-it 16.3.0 built the actual Node 24 Function package locally. A smoke test confirmed its pg dependency resolves within the artifact, its module imports, its API/health routes are present, and DB-free liveness plus preview/config rejection work. Netlify subsequently built and deployed the production Function from GitHub.
 - The static publish boundary and public-source secret/path audit passed. Only public/ is published; credentials, databases, backups, outputs and dependency folders are excluded from Git.
 
 The separate SQLite operator check passed all ten checks on 15 October on Node 24.11.0, including the legacy-adoption hard link. The earlier sandbox restriction is resolved; no production safeguards were changed.
+
+## Real PostgreSQL acceptance — 15 October 2026
+
+The acceptance run completed at 17:24:53 UTC against the real Neon database, using Node 24.11.0.
+
+- The live pg socket negotiated TLS 1.3 with an authorized certificate chain; verification remained enabled.
+- Two separately pooled connections held concurrent transactions with distinct PostgreSQL backend PIDs. One compare-and-save committed and one returned REVISION_CONFLICT; head and history advanced exactly once.
+- A real SQLSTATE 22012 fault injected between the workspace update and history insert rolled back the transaction, preserving the exact prior head and history.
+- A complete REPEATABLE READ export covered all seven canonical tables and passed checksum validation. Restore into a new real Neon database matched field values exactly, including password hashes, raw workspaces, timestamps, full history/import snapshots, legacy payloads and artifacts. Source sessions were absent, a disposable account authenticated, and a second import correctly refused the occupied target.
+- Only the disposable acceptance database, QA agencies, sessions and temporary QA export were removed. Original data, account hashes, retained backups and artifacts were unchanged.
+
+These results establish actual database TLS, concurrent transactions and recovery behavior. They do not establish long-term provider uptime or workload capacity.
 
 ## Retained data
 
 The original work/data/scopewise.sqlite SHA-256 remains 99d053539cf48ef7cbfc51712c04a36d688521c3cf77ef82cf05d453db34e49b, unchanged from before the PostgreSQL refactor. The private portable backup at work/backups/retained-zero-cost.json was validated against the pre-change snapshot: revision 21, three projects, nine tasks, all 21 historical revisions and one import ledger. Its raw saved-state hash and timestamp match the earlier backup. It is labeled individual-database-snapshots, not a falsely claimed coordinated shutdown.
 
+The real Neon migration matches that retained backup exactly: raw workspace JSON, saved timestamp, revision 21, all 21 history records and import snapshots. The raw state SHA-256 is 2fd36da75ef9dceca093d3c83c80f48a200d8c60eeb1b872e433b6ffeca371a7. The workspace was explicitly assigned to the intended agency and an owner was provisioned. A complete initial live backup was exported privately to work/backups/neon-initial-2026-10-15.json before acceptance testing.
+
 Source rollback archive: work/pre-zero-cost-source.zip. Pre-change database snapshots: work/backup-sets/pre-zero-cost/. All remain private and ignored by Git.
 
 ## Source publishing status
 
-GitHub publishing succeeded on 15 October: main advanced from c3594d1 to d75ad3c in [Tanvir284/scopewise](https://github.com/Tanvir284/scopewise). The published source includes the PostgreSQL implementation and deployment guide. Hosting setup and acceptance are tracked separately below.
+GitHub publishing succeeded on 15 October in [Tanvir284/scopewise](https://github.com/Tanvir284/scopewise). The published source includes the PostgreSQL implementation and deployment guide; the first configured live production deploy used e6957d4. Future pushes to main trigger Netlify production builds.
 
 ## Remaining hosted acceptance
 
-Follow zero-cost-deployment.md to create the owned Free provider accounts, initialize/migrate PostgreSQL, provision an owner and set production environment values. Before real users, verify actual HTTPS/cookies, account roles and agency isolation, persistence across redeploy/idle suspension, and an independent restore into a new empty database. Check usage dashboards; Free quota exhaustion can pause service.
+The provider accounts, database migration, owner provisioning, production environment values, HTTPS access, owner browser session and independent real database restore are complete. The following checks are still pending at this documentation checkpoint:
+
+- Full hosted HTTP acceptance for cookies, role enforcement and separate-agency isolation.
+- Persistence and session behavior after a production redeploy and after Neon idle suspension.
+- Final launch backup after hosted acceptance and removal of its disposable fixtures.
+
+Check both usage dashboards during testing; Free quota exhaustion can pause service. The operator instructions are in zero-cost-deployment.md.
 
 ## Earlier SQLite and browser evidence — 9 October 2026
 
