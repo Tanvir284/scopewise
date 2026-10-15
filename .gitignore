@@ -18,3 +18,5 @@ deployment/compose.yaml
 deployment/Caddyfile
 deployment/.env.example
 deployment/Dockerfile.dockerignore
+
+.netlify/

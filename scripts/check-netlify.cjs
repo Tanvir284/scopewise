@@ -1,0 +1,10 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path');
+const root=path.resolve(__dirname,'..');
+const allowed=new Set(['index.html','auth.js','auth.css','costing-ui.js','costing.css','theme.css','planner.js','workspace.js','workspace-data.js','storage.js','workspace.css','cyberpunk.css','operations-data.js','operations-ui.js','operations.css','rule-catalogue.js','rules-engine.js','server-client.js','intelligence.js','platform.css']);
+const files=fs.readdirSync(path.join(root,'public'));
+if(files.length!==allowed.size||files.some(name=>!allowed.has(name)))throw Error('Unexpected frontend publish files.');
+const config=fs.readFileSync(path.join(root,'netlify.toml'),'utf8');
+if(!config.includes('publish = "public"')||!config.includes('functions = "netlify/functions"')||/DATABASE_URL|SESSION_SECRET|PROXY_SECRET/.test(config))throw Error('Invalid Netlify public configuration.');
+for(const file of files)if(/postgres(?:ql)?:\/\/|DATABASE_URL|SCOPEWISE_SESSION_SECRET/.test(fs.readFileSync(path.join(root,'public',file),'utf8')))throw Error('Server credential configuration must not enter frontend assets.');
+console.log('Netlify publish boundary checked: only public assets; backend secrets remain runtime settings.');

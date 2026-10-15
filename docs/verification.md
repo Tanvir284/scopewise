@@ -1,5 +1,30 @@
 # Scopewise verification
 
+## Current deployment preparation — 15 October 2026
+
+The selected setup is Netlify Free static hosting plus a Node 24 API Function, with Neon Free PostgreSQL holding all canonical authentication and agency data. No provider account, purchase, public application deployment or real external database connection was made.
+
+- npm test passed all eleven suites on Node 24.11.0 after network access was enabled for the loopback HTTP tests.
+- The PostgreSQL/serverless suite passed thirteen groups: verified-TLS URL controls; compare-and-save revisions and atomic rollback; ID/relationship import conflicts with retained snapshots; completed replay and damaged historical-ledger handling; size limits; passwords/credential races/expiry/throttling/last-owner/readiness; Function startup and preview rejection; HTTP roles/CSRF/cookies/costs/isolation; revocation during upload; payload caps; PostgreSQL export/restore; SQLite cutover and explicit legacy adoption; fresh application-instance persistence.
+- PGlite runs PostgreSQL SQL locally through a serial connection shim. It verifies schema, transaction rollback and application behavior; it cannot verify real multi-client locks, hosted TLS, provider uptime or capacity.
+- Netlify zip-it-and-ship-it 16.3.0 built the actual Node 24 Function package. A smoke test confirmed its pg dependency resolves within the artifact, its module imports, its API/health routes are present, and DB-free liveness plus preview/config rejection work. No bundle was uploaded.
+- The static publish boundary and public-source secret/path audit passed. Only public/ is published; credentials, databases, backups, outputs and dependency folders are excluded from Git.
+
+The separate SQLite operator check passed its first eight checks on 15 October, then the Windows sandbox denied the hard link used by the existing legacy-adoption tool (EPERM). That gate previously passed all ten checks on 9 October outside the sandbox. No production code was weakened to bypass this environment restriction. A normal trusted PowerShell run of npm run test:operators remains the operator verification step.
+
+## Retained data
+
+The original work/data/scopewise.sqlite SHA-256 remains 99d053539cf48ef7cbfc51712c04a36d688521c3cf77ef82cf05d453db34e49b, unchanged from before the PostgreSQL refactor. The private portable backup at work/backups/retained-zero-cost.json was validated against the pre-change snapshot: revision 21, three projects, nine tasks, all 21 historical revisions and one import ledger. Its raw saved-state hash and timestamp match the earlier backup. It is labeled individual-database-snapshots, not a falsely claimed coordinated shutdown.
+
+Source rollback archive: work/pre-zero-cost-source.zip. Pre-change database snapshots: work/backup-sets/pre-zero-cost/. All remain private and ignored by Git.
+
+## Remaining hosted acceptance
+
+Follow zero-cost-deployment.md to create the owned Free provider accounts, initialize/migrate PostgreSQL, provision an owner and set production environment values. Before real users, verify actual HTTPS/cookies, account roles and agency isolation, persistence across redeploy/idle suspension, and an independent restore into a new empty database. Check usage dashboards; Free quota exhaustion can pause service.
+
+## Earlier SQLite and browser evidence — 9 October 2026
+
+
 Current authentication/deployment checks: 9 October 2026, Asia/Dhaka. Local Node 24.11.0; proposed native Render Node 24.21.0 remains subject to the actual provider build. No hosting purchase, public application deployment or Docker/WSL build/runtime was performed.
 
 ## Current reproducible checks
@@ -90,4 +115,4 @@ The previous checkpoint is preserved as work/test-artifacts/verification-before-
 
 Current cost-report clipboard text was checked. Fresh browser downloads of the latest exports were not performed, and every real clipboard permission outcome is not claimed. Browser control experienced temporary timeouts, then resumed; no saved data was discarded.
 
-No public deployment or external messaging occurred. All owned source, data, documentation and artifacts remain inside Scopewise. The local prototype has no authenticated/shared-user cloud collaboration, automatic time tracking, exchange conversion, payment execution, accounting certification or live AI. Human review is required for scope decisions; recorded-cost comparisons do not forecast remaining delivery cost. Other browser engines, all screen-reader/focus combinations, load certification and actual disk/storage exhaustion are outside these checks.
+No public deployment or external messaging occurred. All owned source, data, documentation and artifacts remain inside Scopewise. Hosted collaboration has not been deployed or verified. The prototype has no automatic time tracking, exchange conversion, payment execution, accounting certification or live AI. Human review is required for scope decisions; recorded-cost comparisons do not forecast remaining delivery cost. Other browser engines, all screen-reader/focus combinations, load certification and actual disk/storage exhaustion are outside these checks.

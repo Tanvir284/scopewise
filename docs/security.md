@@ -8,7 +8,7 @@ Operators provision agency owners/editors/viewers through the CLI. There is no a
 
 Random 256-bit session cookie values are stored only as SHA-256 hashes. The CSRF/session binding is an HMAC using an independent private backend secret. Production cookies are __Host-scopewise, Secure, HttpOnly, SameSite=Strict, Path=/ with no Domain. Sessions expire after 8 hours absolute or 30 minutes idle; server activity updates idle time, and the UI checks the earliest expiry. There is no background loop that extends idle sessions indefinitely.
 
-Login throttling persists in SQLite: 10 attempts per username per 15-minute window, a larger peer limit and at most four concurrent password checks. The peer limiter uses the actual socket peer, so the shared proxy peer limit is coarse. Provider abuse controls and measured capacity remain host-operation considerations.
+Login throttling persists in the selected database (SQLite locally, PostgreSQL when hosted): 10 attempts per username per 15-minute window, a larger peer limit and at most four concurrent password checks. The native server uses its socket peer; the Function uses Netlify context.ip. Caller-supplied forwarded IP headers have no authority. Provider abuse controls and measured capacity remain host-operation considerations.
 
 Logout revokes its session; password reset, role changes and account revocation invalidate the user's sessions. The last active owner cannot be removed or demoted without another owner. Operator session revocation is available after a restore or security event.
 
@@ -16,11 +16,15 @@ Logout revokes its session; password reset, role changes and account revocation 
 
 A session's current server user/agency selects storage. Caller-supplied agency IDs have no authority. Every protected read verifies the supplied bound token before selecting the tenant. A cookie from account B combined with an old tab's account-A token returns401 without B's data. Writes also enforce Origin, token, role, JSON/schema/references and expected revision.
 
-Viewer writes and planner/import requests are denied on the server, before data mutation. Editors may edit/plan; explicit backup merging requires an owner. Agency IDs and globally unique record IDs are validated; cross-project and missing references are rejected. Separate tenant databases isolate workspace, histories and migration backups. This boundary is agency-wide; it does not implement per-project/field permissions or an immutable compliance audit log.
+Viewer writes and planner/import requests are denied on the server, before data mutation. Editors may edit/plan; explicit backup merging requires an owner. Agency IDs and globally unique record IDs are validated; cross-project and missing references are rejected. Local mode uses separate tenant databases. PostgreSQL queries bind to the server-selected agency and atomically save heads/history under an agency lock. Session/role checks inside the transaction reject writes after revocation during upload. This boundary is agency-wide; it does not implement per-project/field permissions or an immutable compliance audit log.
 
 The browser binds requests and queued saves to the live user, agency and token. It rejects stale successful responses, old queued work, mismatched initialization status and delayed unauthorized responses from a replaced session. Modal and file-import callbacks capture identity before awaiting. Auth/session replacement masks/inerts the app and clears old volatile data before opening the new agency.
 
-## Selected-host transport and storage
+## Hosted transport and storage
+
+The selected Netlify/Neon setup serves static pages and the Node API Function on one HTTPS origin. PostgreSQL holds all canonical data, accounts and sessions; there is no ephemeral SQLite fallback. TLS verifies database certificates, and URL options cannot disable it. Preview contexts/mismatched origins are rejected before connecting. Liveness does not query the database. Runtime secrets stay outside public files; API responses are private/no-store. Hosted bodies are limited to 4 MiB, stored states reserve 1 KiB for request envelopes and responses are capped at 5 MiB. See [free deployment](zero-cost-deployment.md).
+
+The following proxy details apply only to the retained paid Render/Vercel alternative.
 
 The Vercel frontend uses same-origin relative API paths. Its external route transform overwrites x-scopewise-proxy from a private Production environment value. Render checks it with a timing-safe comparison before any API route. This transport gate does not replace account authentication. The independent session secret stays on Render. Neither value is compiled into public files or checked into source.
 

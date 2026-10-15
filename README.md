@@ -24,7 +24,7 @@ Scopewise keeps those records together. Paste the new request, review a rule-bas
 
 Agency owners can review delivery and internal spending. Sales teams can keep opportunities, proposals and client price drafts alongside projects. Delivery coordinators and HR colleagues can plan people and capacity. Developers can work from tasks, acceptance criteria and the client message that prompted them. Everyone uses the same project story.
 
-**Current status:** source is available in this repository and the app has been checked locally. Public hosting has not been deployed or verified. The selected hosting design is a Vercel frontend and a native Node backend on Render with persistent SQLite storage. No Docker setup is required.
+**Current status:** source is available in this repository and the app has been checked locally. Public hosting has not been deployed or verified. The selected $0 hosting design is Netlify Free with a Node 24 API Function and Neon Free PostgreSQL. No Docker setup is required.
 
 ## Follow one project from request to delivery
 
@@ -154,7 +154,7 @@ Changing an opportunity to Won or a proposal to Accepted does not create a proje
 
 ## Shared work, clear access
 
-Each account belongs to one agency. The server selects that agency from the authenticated session and stores each agency's workspace in a separate SQLite database.
+Each account belongs to one agency. The server selects the agency from its authenticated session. Local mode uses separate SQLite databases; hosted mode binds agency workspaces and history in PostgreSQL.
 
 | Account role | What it can do in its agency |
 | --- | --- |
@@ -183,13 +183,14 @@ Save or export pending work before signing out. Unsaved browser drafts belong to
 
 ## Run your own workspace
 
-You need Git, a browser and **Node 24.11 or later within the 24.x series**. The app uses Node's built-in SQLite support and has no dependencies to install.
+You need Git, a browser and **Node 24.11 or later within the 24.x series**. Local mode uses Node's built-in SQLite support. Run npm ci to install the PostgreSQL adapter and test dependencies.
 
 1. Clone the source and open its directory:
 
    ```text
    git clone https://github.com/Tanvir284/scopewise.git
    cd scopewise
+   npm ci
    ```
 
 2. Create an agency:
@@ -224,43 +225,31 @@ If you are bringing an existing legacy workspace, use the explicit adoption step
 
 ## Put it online
 
-The selected design has the browser load static pages from Vercel. Requests to `/api` go through Vercel to the native Node service on Render. The server checks the session and role, then opens the appropriate agency's database.
+The selected $0 setup uses **Netlify Free for static pages and a Node 24 API Function, plus Neon Free PostgreSQL**. Accounts, sessions and agency records persist across Function restarts and redeploys. The browser uses one HTTPS origin.
 
-```mermaid
+~~~mermaid
 flowchart TD
-    U["Browser"] --> V["Vercel: static app and same-origin API proxy"]
-    V -->|"API requests with private proxy header"| N["Render: one native Node process"]
-    subgraph DISK["Private persistent disk on Render"]
-        A["Accounts and sessions SQLite"]
-        W1["Agency A workspace SQLite"]
-        W2["Agency B workspace SQLite"]
-    end
-    N --> A
-    N -->|"Agency selected from server session"| W1
-    N -->|"Agency selected from server session"| W2
-```
+    U["Browser: sign-in and workspace"] --> N["Netlify Free: static pages and Node 24 API Function"]
+    N -->|"Session selects agency; saves use transactions"| P["Neon Free PostgreSQL"]
+    P --> A["Accounts, password hashes and sessions"]
+    P --> W["Agency workspaces, revisions and import snapshots"]
+~~~
 
-*This is the implemented deployment configuration and planned hosted arrangement. It is not proof of a completed public deployment. Databases and credentials are kept out of the frontend output.*
+*Source and configuration are prepared. A public hosted application has not been deployed or verified.*
 
-| Step | What to configure |
-| --- | --- |
-| Choose the frontend address | Use the exact stable Vercel production origin for the server's allowed browser origin |
-| Create the backend | Use `deployment/render.yaml` for one native Node service with a paid persistent disk |
-| Provision accounts | Run the agency and user commands on the running backend instance |
-| Configure the frontend | Set the real Render URL, use the full repository root and publish only `public/` |
-| Set private secrets | Keep the session secret on Render; put the matching private proxy secret in both hosts' production settings |
-| Check hosted behavior | Verify HTTPS, cookies through the proxy, roles, agency isolation, persistence after redeploy and recovery before real users |
+Follow the **[step-by-step free deployment guide](docs/zero-cost-deployment.md)** to create provider accounts, preserve SQLite records, initialize PostgreSQL, provision users and configure Netlify.
 
-Once you have the actual backend URL, configure the destination from the project root:
+Netlify currently provides 300 shared credits/month. Neon provides 1 GB/project (20 GB/account total), 100 CU-hours/project/month and 5 GB database egress/project/month. Either provider can pause at its quota. The guide explains current commercial eligibility, limits, backups and recovery with official sources. Continuous uptime and permanent free service are not guaranteed.
 
-```text
-node scripts/configure-vercel.cjs --backend https://ACTUAL.onrender.com
-node scripts/check-frontend.cjs
-```
+~~~text
+npm run check:netlify
+node scripts/postgres-admin.cjs --help
+~~~
 
-The checked-in `.invalid` destination is a template. The frontend deployment check deliberately fails until you replace it with the real backend URL. Example environment files describe settings; they are not automatically loaded.
+PostgreSQL operator backups cover accounts, all agency data, history and import snapshots. Restore requires an empty destination and invalidates sessions. Legacy records are never assigned to an agency automatically.
 
-Follow [deployment](docs/deployment.md) for provider settings, commands and the hosted acceptance checklist. This SQLite design uses one server instance, requires persistent storage and has redeploy downtime. Capacity, monitoring, independent backups and recovery need operator attention. Public TLS, actual Vercel cookie forwarding, redeploy persistence and off-host recovery have not been verified.
+Older paid Render/Vercel templates remain in [deployment alternatives](docs/deployment.md). Render Free's ephemeral filesystem and expiring database do not meet the workspace's durability requirement.
+
 
 ## Checks and further reading
 
@@ -271,7 +260,7 @@ npm test
 npm run test:operators
 ```
 
-On Windows, use `npm.cmd` for the same commands if needed. The main check runs ten suites for planning, workspace data, storage, operations, costing, backend behavior, security and authenticated client behavior. The separate operator check covers provisioning, backup, restore and explicit legacy adoption. Local passing results do not replace hosted acceptance.
+On Windows, use `npm.cmd` for the same commands if needed. The main check runs eleven suites for planning, workspace data, storage, operations, costing, backend behavior, security and authenticated client behavior, PostgreSQL transactions, migration and the serverless API. The separate operator check covers provisioning, backup, restore and explicit legacy adoption. Local passing results do not replace hosted acceptance.
 
 | Read next | What it explains |
 | --- | --- |
@@ -280,7 +269,8 @@ On Windows, use `npm.cmd` for the same commands if needed. The main check runs t
 | [Operations model](docs/operations-model.md) | Relationships among delivery, people, sales and commercial records |
 | [Security](docs/security.md) | Accounts, sessions, role checks and agency isolation |
 | [Backup and restore](docs/backup-restore.md) | Workspace merge, SQLite backups and operator recovery |
-| [Deployment](docs/deployment.md) | Native Render and Vercel configuration and launch checks |
+| [Free deployment](docs/zero-cost-deployment.md) | Netlify/Neon setup, quotas, migration and recovery |
+| [Deployment alternatives](docs/deployment.md) | Older paid native Render/Vercel configuration |
 | [Verification](docs/verification.md) | Local test and browser-check evidence |
 
 <details>

@@ -35,6 +35,7 @@ function inventory(work){
  return files.sort((a,b)=>a.path.localeCompare(b.path));
 }
 function backupWorkspace(options={}){
+ if(process.env.SCOPEWISE_STORAGE==='postgres'&&!options.explicitSqliteExport)throw Error('Use postgres-admin export for a PostgreSQL backup; SQLite tools do not back up the hosted database.');
  const work=U.workDirectory(options.workDir),startedAt=new Date().toISOString();
  const output=options.outputDir?U.inside(path.resolve(U.ROOT,options.outputDir)):path.join(work,'backup-sets',startedAt.replace(/[:.]/g,'-')+'-'+crypto.randomBytes(4).toString('hex'));
  if(output===work||work.startsWith(output+path.sep)||fs.existsSync(output))throw Error('Choose a new backup directory separate from the source workspace.');

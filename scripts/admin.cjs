@@ -65,6 +65,7 @@ function required(options,key){if(!options[key])throw Error('A required option i
 function output(value){process.stdout.write(JSON.stringify(value,null,2)+'\n');}
 async function main(argv=process.argv.slice(2)){
  const command=argv.shift();
+ if(process.env.SCOPEWISE_STORAGE==='postgres'&&command!=='secret-create'&&command!=='--help'&&command)throw Error('Use scripts/postgres-admin.cjs for external database account administration.');
  if(!command||command==='--help'||command==='help'){console.log(HELP);return;}
  const specifications={
   'secret-create':{'--work':'value','--file':'value'},
@@ -128,4 +129,4 @@ async function main(argv=process.argv.slice(2)){
  }finally{auth.close();}
 }
 if(require.main===module)main().catch(error=>{console.error('Operator action failed: '+error.message);process.exitCode=1;});
-module.exports={main,hiddenPassword,readPasswordText};
+module.exports={main,hiddenPassword,readPasswordText,password};

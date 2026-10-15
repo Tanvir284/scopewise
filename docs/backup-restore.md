@@ -1,5 +1,9 @@
 # Backup and restore
 
+For hosted PostgreSQL, use scripts/postgres-admin.cjs export/import. These preserve all agencies, accounts, history and import snapshots in one recovery point; sessions/secrets are excluded. SQLite tools reject remote storage to prevent backing up the wrong database. The explicit sqlite-export command supports a coordinated cutover. Follow [free deployment and recovery](zero-cost-deployment.md#8-back-up-and-recover).
+
+The following commands apply to local/alternative SQLite.
+
 The tools snapshot central authentication, every existing agency workspace, retained legacy data, and migration-backup artifacts. They preserve raw workspace JSON, saved timestamps, revision history, and workspace revisions. Authentication snapshots contain password hashes and agency assignments; treat the entire bundle as private data.
 
 The isolated `node scripts/operator-check.cjs` run passed all 10 checks: committed WAL snapshots, exact multi-agency state/revision/savedAt restoration, session revocation without changing originals, fresh-secret generation, existing-target/offline guards, corrupt checksums, traversal rejection, password-argument redaction, explicit legacy assignment, and password-file account provisioning/revocation. Fixtures were retained at `work/operator-checks/40a65f28-7b66-4f38-8d42-3ab774ce7560`. No hosted Render/Vercel recovery has been demonstrated; it remains a separate acceptance check. Docker and WSL are not part of the selected deployment.

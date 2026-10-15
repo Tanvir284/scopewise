@@ -50,7 +50,7 @@ function createStore(databaseRelative='work/data/scopewise.sqlite',backupRelativ
  function read(){const row=db.prepare('SELECT revision,json,saved_at FROM workspace WHERE id=1').get(); if(!row)return {state:null,revision:0};try{return {state:validateState(JSON.parse(row.json)),revision:row.revision,savedAt:row.saved_at};}catch{throw new ApiError(500,'STORAGE_DAMAGED','The saved server workspace could not be validated. Its database has been preserved; restore a known-good backup before saving.');}}
  function save(raw,revision,reason='Workspace saved'){
   const state=validateState(raw);
-  if(!Number.isSafeInteger(revision)||revision<0)throw new ApiError(400,'INVALID_REVISION','A non-negative workspace revision is required.');
+  if(!Number.isSafeInteger(revision)||revision<0||revision>=Number.MAX_SAFE_INTEGER)throw new ApiError(400,'INVALID_REVISION','A non-negative workspace revision is required.');
   db.exec('BEGIN IMMEDIATE');
   try{
    const current=read();
@@ -104,9 +104,9 @@ function json(res,status,data){res.writeHead(status,{'Content-Type':'application
 async function readJson(req,maxBytes=8*1024*1024){
  if(!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type']||''))throw new ApiError(415,'JSON_REQUIRED','Send a JSON request body.');
  const declared=Number(req.headers['content-length']);
- if(Number.isFinite(declared)&&declared>maxBytes)throw new ApiError(413,'BODY_TOO_LARGE','Workspace payload exceeds 8 MB.');
+ if(Number.isFinite(declared)&&declared>maxBytes)throw new ApiError(413,'BODY_TOO_LARGE','The request exceeds this deployment’s allowed size.');
  const chunks=[];let bytes=0;
- for await(const chunk of req){bytes+=chunk.length;if(bytes>maxBytes)throw new ApiError(413,'BODY_TOO_LARGE','Workspace payload exceeds 8 MB.');chunks.push(chunk);}
+ for await(const chunk of req){bytes+=chunk.length;if(bytes>maxBytes)throw new ApiError(413,'BODY_TOO_LARGE','The request exceeds this deployment’s allowed size.');chunks.push(chunk);}
  let body;try{body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw new ApiError(400,'INVALID_JSON','The request body is not valid JSON.');}
  if(!body||typeof body!=='object'||Array.isArray(body))throw new ApiError(400,'INVALID_BODY','A JSON object is required.');
  return body;
@@ -182,16 +182,15 @@ function createLegacyApp(options={}){
 function emptyWorkspace(name){return Ops.normalize({version:1,settings:{name,currency:'BDT'},clients:[],projects:[],changes:[],tasks:[],activity:[]});}
 function createApp(options={}){
  if(options.authentication===false){if(options.config?.mode==='production'||process.env.NODE_ENV==='production'||process.env.SCOPEWISE_MODE==='production')throw Error('Unauthenticated compatibility mode cannot run in production.');return createLegacyApp(options);}
- const config=options.config||loadConfig(),auth=options.authStore||createAuthStore({filename:path.join(config.workDir,'data/auth.sqlite'),sessionSecret:config.sessionSecret});
- const stores=new Map();let closing=false,inFlightLogins=0;
+ const config=options.config||loadConfig(),backend=options.backend||(config.storage==='postgres'?require('./lib/postgres.cjs').createPostgresBackend({databaseUrl:config.databaseUrl,Pool:options.Pool,sessionSecret:config.sessionSecret,maxWorkspaceBytes:(config.maxBodyBytes||8388608)-1024,services:{validateState,emptyWorkspace,ApiError}}):null),auth=options.authStore||backend?.auth||createAuthStore({filename:path.join(config.workDir,'data/auth.sqlite'),sessionSecret:config.sessionSecret});
+ const recentLocalAgencies=new Set();let closing=false,inFlightLogins=0;
  const log=options.logger||((event)=>process.stdout.write(JSON.stringify({...event,at:new Date().toISOString()})+'\n'));
- function tenant(user){
+ async function tenant(user,authorization){
   const id=user.agency.id;if(!/^[a-f0-9-]{36}$/.test(id))throw new ApiError(500,'ACCOUNT_UNAVAILABLE','Account configuration is unavailable.');
-  if(stores.has(id)){const value=stores.get(id);stores.delete(id);stores.set(id,value);return value;}
-  if(stores.size>=32){const oldest=stores.keys().next().value;stores.get(oldest).close();stores.delete(oldest);}
+  if(backend){const store=backend.workspace(id,authorization);await store.ensureInitialized(user.agency.name);return store;}
+  recentLocalAgencies.delete(id);recentLocalAgencies.add(id);if(recentLocalAgencies.size>32)recentLocalAgencies.delete(recentLocalAgencies.values().next().value);
   const base=config.workRelative+'/tenants/'+id,store=createStore(base+'/scopewise.sqlite',base+'/backups');
-  if(!store.read().state)store.save(emptyWorkspace(user.agency.name),0,'Agency workspace initialized');
-  stores.set(id,store);return store;
+  try{if(!store.read().state)store.save(emptyWorkspace(user.agency.name),0,'Agency workspace initialized');return store;}catch(error){store.close();throw error;}
  }
  function cookies(req){const raw=req.headers.cookie||'';if(raw.length>8192)return null;const name=config.secureCookies?'__Host-scopewise':'scopewise_session';const matches=raw.split(';').map(x=>x.trim()).filter(x=>x.startsWith(name+'='));if(matches.length!==1)return null;return matches[0].slice(name.length+1);}
  function setCookie(res,token,remove=false){res.setHeader('Set-Cookie',(config.secureCookies?'__Host-scopewise':'scopewise_session')+'='+(remove?'':token)+'; Path=/; HttpOnly; SameSite=Strict; Max-Age='+(remove?'0':'28800')+(config.secureCookies?'; Secure':''));}
@@ -204,7 +203,8 @@ function createApp(options={}){
   if(req.headers['sec-fetch-site']==='cross-site')throw new ApiError(403,'CROSS_ORIGIN','Cross-site access is not permitted.');
   if(!['GET','HEAD'].includes(req.method)&&!origins.includes(req.headers.origin))throw new ApiError(403,'ORIGIN_REQUIRED','A same-origin request is required.');
  }
- const server=http.createServer(async(req,res)=>{
+ const handler=async(req,res)=>{
+  let requestStore=null;
   const requestId=crypto.randomUUID();res.setHeader('X-Request-ID',requestId);res.setHeader('CDN-Cache-Control','no-store');res.setHeader('Vercel-CDN-Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Cache-Control','no-store');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Frame-Options','DENY');res.setHeader('Permissions-Policy','camera=(), microphone=(), geolocation=()');
   res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
   if(config.secureCookies)res.setHeader('Strict-Transport-Security','max-age=31536000');
@@ -215,23 +215,25 @@ function createApp(options={}){
    if(closing)throw new ApiError(503,'SHUTTING_DOWN','The service is shutting down. Retry shortly.');
    if(pathname==='/health/live'&&['GET','HEAD'].includes(req.method))return json(res,200,{status:'ok'});
    if(pathname==='/health/ready'&&['GET','HEAD'].includes(req.method)){
-    let ready=false;try{auth.health();ready=auth.listUsers().some(x=>x.active&&x.role==='owner');for(const store of stores.values())store.read();}catch{ready=false;}
+    let ready=false;try{await auth.health();ready=auth.hasActiveOwner?await auth.hasActiveOwner() :(await auth.listUsers()).some(x=>x.active&&x.role==='owner');
+    if(!backend)for(const id of recentLocalAgencies){const db=new DatabaseSync(path.join(config.workDir,'tenants',id,'scopewise.sqlite'),{readOnly:true});try{const row=db.prepare('SELECT json FROM workspace WHERE id=1').get();if(row)validateState(JSON.parse(row.json));}finally{db.close();}}
+    }catch{ready=false;}
     return json(res,ready?200:503,{status:ready?'ready':'not-ready'});
    }
-   const rawToken=cookies(req),session=auth.getSession(rawToken);
+   const rawToken=cookies(req),session=pathname.startsWith('/api/')?await auth.getSession(rawToken):null;
    if(pathname==='/api/auth/session'&&req.method==='GET')return json(res,200,session?{authenticated:true,...session}:{authenticated:false});
    if(pathname==='/api/auth/login'&&req.method==='POST'){
     const body=await readJson(req,4096);rejectPrototypeKeys(body);
     if(Object.keys(body).some(k=>!['username','password'].includes(k))||typeof body.username!=='string'||typeof body.password!=='string'||body.username.length>100||body.password.length>128)throw new ApiError(400,'INVALID_LOGIN','Enter a valid username and password.');
-    if(!auth.checkLoginLimit(body.username,req.socket.remoteAddress||'unknown')||inFlightLogins>=4){res.setHeader('Retry-After','900');throw new ApiError(429,'LOGIN_LIMIT','Too many sign-in attempts. Try again later.');}
+    if(!(await auth.checkLoginLimit(body.username,req.socket.remoteAddress||'unknown'))||inFlightLogins>=4){res.setHeader('Retry-After','900');throw new ApiError(429,'LOGIN_LIMIT','Too many sign-in attempts. Try again later.');}
     inFlightLogins++;let user;try{user=await auth.authenticate(body.username,body.password);}finally{inFlightLogins--;}
     if(!user){log({event:'login_rejected',requestId});throw new ApiError(401,'INVALID_CREDENTIALS','Invalid username or password.');}
-    auth.clearLoginLimit(body.username);if(rawToken)auth.revokeSession(rawToken);
-    const created=auth.createSession(user.id);setCookie(res,created.token);log({event:'login',requestId,userId:user.id,agencyId:user.agency.id});
+    await auth.clearLoginLimit(body.username);if(rawToken)await auth.revokeSession(rawToken);
+    const created=await auth.createSession(user.id,user.credentialVersion);setCookie(res,created.token);log({event:'login',requestId,userId:user.id,agencyId:user.agency.id});
     return json(res,200,{authenticated:true,user:created.user,sessionToken:created.sessionToken,expiresAt:created.expiresAt,idleExpiresAt:created.idleExpiresAt});
    }
    if(pathname==='/api/auth/logout'&&req.method==='POST'){
-    if(!session)throw new ApiError(401,'AUTH_REQUIRED','Sign in to continue.');verifyCSRF(req,session);auth.revokeSession(rawToken);setCookie(res,'',true);return json(res,200,{authenticated:false});
+    if(!session)throw new ApiError(401,'AUTH_REQUIRED','Sign in to continue.');verifyCSRF(req,session);await auth.revokeSession(rawToken);setCookie(res,'',true);return json(res,200,{authenticated:false});
    }
    if(pathname.startsWith('/api/')){
     if(!['GET','PUT','POST'].includes(req.method)){res.setHeader('Allow','GET, PUT, POST');throw new ApiError(405,'METHOD_NOT_ALLOWED','Unsupported API method.');}
@@ -240,12 +242,12 @@ function createApp(options={}){
     if(req.method!=='GET'){
      if(session.user.role==='viewer')throw new ApiError(403,'READ_ONLY','Your account has read-only access.');
      if(pathname==='/api/migrate'&&session.user.role!=='owner')throw new ApiError(403,'OWNER_REQUIRED','Only an agency owner may merge a backup.');
-     verifyCSRF(req,session);const body=await readJson(req);rejectPrototypeKeys(body);
-     const store=tenant(session.user);
-     if(pathname==='/api/workspace'&&req.method==='PUT'){const saved=store.save(body.state,body.revision,'Workspace saved by '+session.user.id);log({event:'workspace_saved',requestId,userId:session.user.id,agencyId:session.user.agency.id,revision:saved.revision});return json(res,200,saved);}
-     if(pathname==='/api/migrate'&&req.method==='POST'){const migrated=store.migrate(body.state);log({event:'workspace_import',requestId,userId:session.user.id,agencyId:session.user.agency.id,revision:migrated.revision});return json(res,200,migrated);}
+     verifyCSRF(req,session);const body=await readJson(req,config.maxBodyBytes||8388608);rejectPrototypeKeys(body);
+     const store=requestStore=await tenant(session.user,{token:rawToken,userId:session.user.id});
+     if(pathname==='/api/workspace'&&req.method==='PUT'){const saved=await store.save(body.state,body.revision,'Workspace saved by '+session.user.id);log({event:'workspace_saved',requestId,userId:session.user.id,agencyId:session.user.agency.id,revision:saved.revision});return json(res,200,saved);}
+     if(pathname==='/api/migrate'&&req.method==='POST'){const migrated=await store.migrate(body.state);log({event:'workspace_import',requestId,userId:session.user.id,agencyId:session.user.agency.id,revision:migrated.revision});return json(res,200,migrated);}
      if(pathname==='/api/plan'&&req.method==='POST'){
-      const state=store.read().state,project=state.projects.find(p=>p.id===body.projectId);
+      const state=(await store.read({write:true})).state,project=state.projects.find(p=>p.id===body.projectId);
       if(!project)throw new ApiError(400,'PROJECT_REQUIRED','Select an existing project in your agency.');
       if(typeof body.original!=='string'||typeof body.message!=='string'||!body.original.trim()||!body.message.trim()||body.original.length>24000||body.message.length>12000)throw new ApiError(400,'INVALID_REQUIREMENTS','Original requirements and client message are required (24,000 and 12,000 character limits).');
       if(body.original!==project.original)throw new ApiError(409,'BASELINE_CHANGED','Review the current project baseline before planning.');
@@ -253,12 +255,12 @@ function createApp(options={}){
      }
      throw new ApiError(404,'API_NOT_FOUND','This write endpoint does not exist.');
     }
-    const store=tenant(session.user);
-    if(pathname==='/api/status')return json(res,200,{storage:'server',database:'sqlite',localOnly:config.mode==='development',sessionToken:session.sessionToken,user:session.user,readOnly:session.user.role==='viewer',automaticMigration:false,planner:{mode:'rules',configured:true,label:'Deterministic analysis',version:'2.0',ruleCount:Rules.catalogue().length},revision:store.read().revision});
+    const store=requestStore=await tenant(session.user,{token:rawToken,userId:session.user.id});
+    if(pathname==='/api/status')return json(res,200,{storage:'server',database:config.storage||'sqlite',localOnly:config.mode==='development',sessionToken:session.sessionToken,user:session.user,readOnly:session.user.role==='viewer',automaticMigration:false,planner:{mode:'rules',configured:true,label:'Deterministic analysis',version:'2.0',ruleCount:Rules.catalogue().length},revision:store.revision?await store.revision():(await store.read()).revision});
     if(pathname==='/api/session')return json(res,200,{sessionToken:session.sessionToken});
-    if(pathname==='/api/workspace')return json(res,200,store.read());
-    if(pathname==='/api/history')return json(res,200,{revisions:store.history()});
-    if(pathname==='/api/backup'){res.setHeader('Content-Disposition','attachment; filename="scopewise-agency-backup.json"');return json(res,200,store.read().state);}
+    if(pathname==='/api/workspace')return json(res,200,await store.read());
+    if(pathname==='/api/history')return json(res,200,{revisions:await store.history()});
+    if(pathname==='/api/backup'){res.setHeader('Content-Disposition','attachment; filename="scopewise-agency-backup.json"');return json(res,200,(await store.read()).state);}
     throw new ApiError(404,'API_NOT_FOUND','This API endpoint does not exist.');
    }
    if(!['GET','HEAD'].includes(req.method)){res.setHeader('Allow','GET, HEAD');throw new ApiError(405,'METHOD_NOT_ALLOWED','Only GET and HEAD are supported for files.');}
@@ -270,15 +272,18 @@ function createApp(options={}){
    if(res.headersSent)return res.end();const known=error instanceof ApiError,status=known?error.status:error.code==='ENOENT'?404:500;
    log({event:'request_failed',requestId,status,code:known?error.code:'SERVER_ERROR'});
    json(res,status,{error:known?error.message:'The service could not complete the request. Quote its request ID to the operator.',code:known?error.code:'SERVER_ERROR',requestId,...(known&&error.details?{details:error.details}:{})});
-  }
- });
+  }finally{if(requestStore)await requestStore.close();}
+ };
+ const server=http.createServer(handler);
  server.headersTimeout=15000;server.requestTimeout=30000;server.maxRequestsPerSocket=100;server.keepAliveTimeout=5000;
  server.on('clientError',(_error,socket)=>{if(socket.writable)socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');});
- return {server,auth,config,close:()=>{closing=true;return new Promise(resolve=>server.close(()=>{for(const store of stores.values())store.close();auth.close();resolve();}));}};
+ async function resourcesClose(){await auth.close();if(backend)await backend.close();}
+ return {server,handler,auth,config,backend,ready:()=>backend?backend.ready():Promise.resolve(),close:()=>{closing=true;return new Promise((resolve,reject)=>server.close(()=>resourcesClose().then(resolve,reject)));}};
 }
+
 if(require.main===module){
- let app;try{const config=loadConfig();app=createApp({config});app.server.listen(config.port,config.host,()=>console.log('Scopewise authenticated workspace: '+(config.publicOrigin||'http://127.0.0.1:'+config.port)));
- app.server.on('error',error=>{console.error(JSON.stringify({event:'startup_failed',code:error.code||'ERROR'}));app.auth.close();process.exitCode=1;});
+ let app;try{const config=loadConfig();app=createApp({config});app.ready().then(()=>app.server.listen(config.port,config.host,()=>console.log('Scopewise authenticated workspace: '+(config.publicOrigin||'http://127.0.0.1:'+config.port)))).catch(()=>{console.error('Scopewise database startup failed. Verify private settings and schema initialization.');process.exitCode=1;app.close().catch(()=>{});});
+ app.server.on('error',error=>{console.error(JSON.stringify({event:'startup_failed',code:error.code||'ERROR'}));app.close().catch(()=>{});process.exitCode=1;});
  for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{const deadline=setTimeout(()=>process.exit(1),10000);deadline.unref();app.close().then(()=>process.exit(0));});
  }catch(error){console.error('Scopewise startup configuration failed: '+error.message);process.exitCode=1;}
 }

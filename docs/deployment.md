@@ -1,6 +1,12 @@
-# Vercel frontend and native Render backend
+# Deployment choices
 
-The selected deployment serves the frontend on Vercel and runs `node server.cjs` as a native Render Node service. Docker and WSL are excluded from this workflow. Their earlier templates are retained as historical alternatives and are not required or verified deployment steps. No hosting purchase, public deployment, domain purchase, or hosted TLS/session test has been performed.
+The selected $0 setup is **Netlify Free + Neon Free PostgreSQL**. Follow [zero-cost-deployment.md](zero-cost-deployment.md) for the current operator steps and limits. No public hosted application has been deployed or verified.
+
+The remainder preserves the older paid SQLite option. It requires a paid persistent disk and a commercial-eligible Vercel plan; do not use it as a Free deployment guide.
+
+# Older paid Vercel frontend and native Render backend
+
+This alternative deployment serves the frontend on Vercel and runs `node server.cjs` as a native Render Node service. Docker and WSL are excluded from this workflow. Their earlier templates are retained as historical alternatives and are not required or verified deployment steps. No hosting purchase, public deployment, domain purchase, or hosted TLS/session test has been performed.
 
 The browser uses relative `/api/` URLs on its Vercel origin. Vercel proxies those requests to Render; SQLite and authentication records remain on Render's persistent disk. This design keeps the existing strict session cookies and origin checks. The backend does not enable browser CORS access.
 

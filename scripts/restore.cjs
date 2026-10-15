@@ -1,4 +1,5 @@
 'use strict';
+if(process.env.SCOPEWISE_STORAGE==='postgres')throw Error('Use postgres-admin import into an empty database for PostgreSQL recovery.');
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{DatabaseSync}=require('node:sqlite');
 const U=require('./operator-utils.cjs');
 function allowedEntry(entry){

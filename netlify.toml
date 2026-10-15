@@ -1,0 +1,24 @@
+[build]
+  command = "node scripts/check-netlify.cjs"
+  publish = "public"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "24.11.0"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    X-Frame-Options = "DENY"
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Cache-Control = "private, no-store"
+    Netlify-CDN-Cache-Control = "no-store"
