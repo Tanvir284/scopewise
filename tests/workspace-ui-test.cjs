@@ -68,5 +68,14 @@ let count=0;async function check(name,fn){await fn();count++;console.log('PASS '
   const f=uiFixture();f.state.operations.team.push({id:'qa-person',name:'=FORMULA()',role:'Developer',email:'',capacityHours:40,active:true});f.state.operations.timeEntries.push({id:'time-a',projectId:'project-1',taskId:'task-1',teamId:'qa-person',date:'2026-10-15',durationMinutes:60,note:'  =HYPERLINK("bad")',costRateMinor:10005,costCurrency:'BDT'},{id:'time-b',projectId:'project-2',taskId:null,teamId:null,date:'2026-10-14',durationMinutes:15,note:'Excluded record'});Ops.validate(f.state);
   f.render('time');f.selections.get('Filter time by person').change('qa-person');f.fields.get('ops-filter-from').value='2026-10-15';f.fields.get('ops-filter-to').value='2026-10-15';f.buttons.find(b=>b.textContent==='Apply dates').click();f.render('time');f.buttons.find(b=>b.textContent==='Export filtered CSV').click();const csv=f.exports[0];assert(csv.startsWith('\uFEFF'));assert(csv.includes("\"'=FORMULA()\""));assert(csv.includes("\"'  =HYPERLINK(\"\"bad\"\")\""));assert(csv.includes('100.05'));assert(!csv.includes('Excluded record'));assert.equal(csv.split('\r\n').length,2);
  });
+ await check('commercial Markdown exports preserve user text without active markup',()=>{
+  const f=uiFixture(),hostile='<img src=x onerror=alert(1)> [click](javascript:alert(1))',at='2026-10-16T00:00:00.000Z';
+  f.state.projects.find(p=>p.id==='project-1').name=hostile;f.state.clients.find(p=>p.id==='client-1').name=hostile;
+  f.state.operations.invoices=[{id:'qa-invoice',projectId:'project-1',number:hostile,currency:'BDT',status:'Draft',issuedDate:'2026-10-16',dueDate:'',notes:'First line\n# '+hostile,createdAt:at,lines:[{description:hostile,qty:1,rateMinor:100}]}];
+  f.state.operations.proposals=[{id:'qa-proposal',projectId:'project-1',clientId:'client-1',opportunityId:null,title:hostile,scope:'First line\n# '+hostile,currency:'BDT',status:'Draft',validUntil:'',notes:hostile,createdAt:at,lines:[{description:hostile,qty:1,rateMinor:100}]}];
+  Ops.validate(f.state);f.render('finance');f.buttons.find(b=>b.textContent==='Invoice drafts').click();f.render('finance');f.buttons.find(b=>b.textContent==='Export .md').click();
+  f.render('crm');f.buttons.find(b=>b.textContent==='Proposals').click();f.render('crm');f.buttons.find(b=>b.textContent==='Export .md').click();
+  assert.equal(f.exports.length,2);for(const output of f.exports){assert(!output.includes('<img'));assert(!output.includes('[click]('));assert(output.includes('&lt;img'));assert(output.includes('\\[click\\]\\('));assert(output.includes('First line\n\\# '));}
+ });
  console.log('Passed '+count+' workspace UI regression scenarios.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
