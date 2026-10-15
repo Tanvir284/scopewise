@@ -2,7 +2,7 @@
 
 ## Current deployment preparation — 15 October 2026
 
-The selected setup is Netlify Free static hosting plus a Node 24 API Function, with Neon Free PostgreSQL holding all canonical authentication and agency data. No provider account, purchase, public application deployment or real external database connection was made.
+The selected setup is Netlify Free static hosting plus a Node 24 API Function, with Neon Free PostgreSQL holding all canonical authentication and agency data. Source is published on GitHub. Live setup is in progress; the application has not yet been deployed and hosted acceptance remains pending.
 
 - npm test passed all eleven suites on Node 24.11.0 after network access was enabled for the loopback HTTP tests.
 - The PostgreSQL/serverless suite passed thirteen groups: verified-TLS URL controls; compare-and-save revisions and atomic rollback; ID/relationship import conflicts with retained snapshots; completed replay and damaged historical-ledger handling; size limits; passwords/credential races/expiry/throttling/last-owner/readiness; Function startup and preview rejection; HTTP roles/CSRF/cookies/costs/isolation; revocation during upload; payload caps; PostgreSQL export/restore; SQLite cutover and explicit legacy adoption; fresh application-instance persistence.
@@ -10,7 +10,7 @@ The selected setup is Netlify Free static hosting plus a Node 24 API Function, w
 - Netlify zip-it-and-ship-it 16.3.0 built the actual Node 24 Function package. A smoke test confirmed its pg dependency resolves within the artifact, its module imports, its API/health routes are present, and DB-free liveness plus preview/config rejection work. No bundle was uploaded.
 - The static publish boundary and public-source secret/path audit passed. Only public/ is published; credentials, databases, backups, outputs and dependency folders are excluded from Git.
 
-The separate SQLite operator check passed its first eight checks on 15 October, then the Windows sandbox denied the hard link used by the existing legacy-adoption tool (EPERM). That gate previously passed all ten checks on 9 October outside the sandbox. No production code was weakened to bypass this environment restriction. A normal trusted PowerShell run of npm run test:operators remains the operator verification step.
+The separate SQLite operator check passed all ten checks on 15 October on Node 24.11.0, including the legacy-adoption hard link. The earlier sandbox restriction is resolved; no production safeguards were changed.
 
 ## Retained data
 
@@ -20,7 +20,7 @@ Source rollback archive: work/pre-zero-cost-source.zip. Pre-change database snap
 
 ## Source publishing status
 
-The implementation and guide are committed locally. GitHub push was attempted, but Windows sandbox restrictions prevented the Git credential helper from completing. Publishing was not verified. Run git push origin main in a normal trusted PowerShell terminal before importing this source from GitHub into Netlify. No hosting account or deployment was created.
+GitHub publishing succeeded on 15 October: main advanced from c3594d1 to d75ad3c in [Tanvir284/scopewise](https://github.com/Tanvir284/scopewise). The published source includes the PostgreSQL implementation and deployment guide. Hosting setup and acceptance are tracked separately below.
 
 ## Remaining hosted acceptance
 
@@ -29,9 +29,9 @@ Follow zero-cost-deployment.md to create the owned Free provider accounts, initi
 ## Earlier SQLite and browser evidence — 9 October 2026
 
 
-Current authentication/deployment checks: 9 October 2026, Asia/Dhaka. Local Node 24.11.0; proposed native Render Node 24.21.0 remains subject to the actual provider build. No hosting purchase, public application deployment or Docker/WSL build/runtime was performed.
+Historical authentication/deployment checks: 9 October 2026, Asia/Dhaka. Local Node 24.11.0; the earlier Render proposal used Node 24.21.0, subject to the provider build. No hosting purchase, public application deployment or Docker/WSL build/runtime was performed during those checks. The Netlify/Neon setup above supersedes this provider proposal.
 
-## Current reproducible checks
+### Reproducible checks — 9 October 2026
 
 npm test passed all ten suites after the authenticated implementation and cross-tab fix. Existing feature coverage includes 48 rules/19 rule scenarios, 12 persistence scenarios, 17 operations checks and 24 costing checks.
 
@@ -41,7 +41,7 @@ tests/client-auth-test.cjs passed 11 checks: no unscoped auto-import; settled-ga
 
 The separate operator-check.cjs gate passed 10 real SQLite scenarios. It covers committed-WAL backups, verified exact restore, original preservation, restored session revocation/fresh secret, checksum/path guards, private password input, role/session administration and explicit legacy adoption. This remains separate from npm test and from host acceptance.
 
-## Current browser and preservation evidence
+### Browser and preservation evidence — 9 October 2026
 
 An isolated authenticated preview copied retained QA fixtures into agency A; agency B started empty. Browser actions verified owner sign-in/save/sign-out, same-agency viewer access, server-backed reload and separate empty agency B. After the final bound-read-token change, real sign-in/logout/viewer costing forms were rechecked.
 
@@ -51,9 +51,9 @@ Saved synthetic costing totals remained planned 300.38 BDT, actual 175.13 BDT an
 
 The original unassigned legacy workspace was compared read-only to its prior capture: full state, revision and timestamp matched. The private evidence report lives in ignored outputs/ and is not part of the public source package. No production agency account or automatic legacy assignment was created.
 
-## Required hosted evidence still missing
+### Earlier provider acceptance gaps — 9 October 2026
 
-Actual Vercel TLS/cookie/header/cache behavior, Render disk mounting and restart/redeploy persistence, two-agency acceptance on hosted URLs, protected off-host backup/restore rehearsal and measured workload limits are unverified. Local HTTPS-host simulation over loopback HTTP does not establish these facts. Exact URLs, managed secrets, initial ownership and separate hosting authorization remain launch gates.
+The earlier Vercel/Render proposal had no actual hosted TLS/cookie/header/cache checks, disk mounting or restart/redeploy evidence, two-agency acceptance, off-host backup/restore rehearsal or measured workload limits. Local HTTPS-host simulation over loopback HTTP did not establish those facts. These are historical gaps for the superseded proposal; the current Netlify/Neon acceptance requirements are listed above.
 
 ## Historical local feature/redesign checks
 

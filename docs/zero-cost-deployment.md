@@ -1,6 +1,6 @@
 # Scopewise: $0 deployment with Netlify and Neon
 
-Initial guide: 9 October 2026. Free-plan quotas and environment guidance rechecked on 15 October 2026. Source is prepared; no provider account or public deployment was created or tested.
+Initial guide: 9 October 2026. Free-plan quotas and environment guidance rechecked on 15 October 2026. Source is published on GitHub. Live setup is in progress; hosted acceptance remains pending.
 
 Use standard Netlify Free for static pages and a Node 24 API Function, and an owned Neon Free PostgreSQL database. Accounts, password hashes, sessions, login throttles, agency records, revision history and import snapshots persist in PostgreSQL. Function restarts do not erase canonical data.
 
@@ -18,13 +18,7 @@ The current free plans support this commercial use. Their quotas can pause servi
 
 Open PowerShell in the Scopewise repository. Existing users must preserve work/ and their backups.
 
-For this prepared local checkout, GitHub publishing is still pending because the sandbox blocked Git credential access. Before importing from GitHub into Netlify, run this in your normal trusted PowerShell terminal:
-
-~~~powershell
-git push origin main
-~~~
-
-This publishes source only; it does not deploy the app. Fresh clones receive only already-published commits. After that push, a fresh installation can use:
+The implementation is published in [Tanvir284/scopewise](https://github.com/Tanvir284/scopewise). For a fresh installation:
 
 ~~~powershell
 git clone https://github.com/Tanvir284/scopewise.git
@@ -35,7 +29,7 @@ npm.cmd run test:operators
 npm.cmd run check:netlify
 ~~~
 
-Use Node 24.11 or later within 24.x. npm works instead of npm.cmd on other shells. If Codex’s Windows sandbox denies the hard link used by the separate SQLite operator check, run that command in your normal trusted PowerShell terminal; do not disable its recovery safeguards. pg is the PostgreSQL dependency; PGlite is for tests only. Local SQLite remains available. No Docker, WSL or AI service is needed.
+Use Node 24.11 or later within 24.x. npm works instead of npm.cmd on other shells. pg is the PostgreSQL dependency; PGlite is for tests only. Local SQLite remains available. No Docker, WSL or AI service is needed.
 
 ## 2. Create Neon Free PostgreSQL
 
