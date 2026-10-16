@@ -77,5 +77,13 @@ let count=0;async function check(name,fn){await fn();count++;console.log('PASS '
   f.render('crm');f.buttons.find(b=>b.textContent==='Proposals').click();f.render('crm');f.buttons.find(b=>b.textContent==='Export .md').click();
   assert.equal(f.exports.length,2);for(const output of f.exports){assert(!output.includes('<img'));assert(!output.includes('[click]('));assert(output.includes('&lt;img'));assert(output.includes('\\[click\\]\\('));assert(output.includes('First line\n\\# '));}
  });
+ await check('unpriced time entries allow currency selection and commercial handoffs draft estimates and invoices cleanly',()=>{
+  const f=uiFixture();f.state.operations.timeEntries.push({id:'time-unpriced',projectId:'project-1',taskId:'task-1',teamId:null,date:'2026-10-16',durationMinutes:45,note:'Initial triage'});
+  f.state.operations.estimates.push({id:'est-1',projectId:'project-1',name:'Phase 1 Scope',hours:10,rateMinor:150000,currency:'BDT',status:'Accepted',notes:'Approved',createdAt:'2026-10-16T00:00:00.000Z'});Ops.validate(f.state);
+  f.sandbox.OpsUI.open('timeEntries','time-unpriced',f.context);assert.equal(Boolean(f.fields.get('ops-cost-currency').disabled),false);
+  f.render('finance');assert(f.buttons.some(b=>b.textContent==='Draft invoice'),'estimate row exposes Draft invoice action');
+  f.sandbox.OpsUI.estimateDraft({projectId:'project-1',name:'Scope expansion',hours:8,rateMinor:150000,currency:'BDT',notes:'Change order'},f.context);f.form.save();Ops.validate(f.state);
+  assert(f.state.operations.estimates.some(est=>est.name==='Scope expansion'&&est.hours===8));
+ });
  console.log('Passed '+count+' workspace UI regression scenarios.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

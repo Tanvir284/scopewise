@@ -138,4 +138,21 @@ check('Minor unit display is exact at safe integer boundary and date defaults ho
  assert.equal(Ops.today('UTC',new Date('2026-10-07T20:00:00.000Z')),'2026-10-07');
  assert.throws(()=>Ops.formatMinor(-1,'BDT'),/Invalid monetary/);
 });
+check('Project insights compute deterministic margin, burn percentage, and delivery health',()=>{
+ const s=fixture();
+ const insights=Ops.projectInsights(s,{today});
+ assert.equal(insights.length,2);
+ assert.equal(insights[0].projectId,'project-1');
+ assert.equal(insights[0].acceptedEstimateMinor,1500000);
+ assert.equal(insights[0].plannedHours,25);
+ assert.equal(insights[0].acceptedHours,10);
+ assert.equal(insights[0].loggedHours,1.5);
+ assert.equal(insights[0].burnPercent,15);
+ assert.equal(insights[0].health,'Critical');
+ assert(insights[0].reasons.some(r=>r.includes('critical issue'))&&insights[0].reasons.some(r=>r.includes('overdue milestone')));
+ s.operations.milestones[0].status='Reached';
+ s.operations.issues[0].status='Resolved';
+ const healthy=Ops.projectInsights(s,{today});
+ assert.equal(healthy[0].health,'Healthy');
+});
 console.log('Completed '+count+' operations model checks.');

@@ -5,7 +5,13 @@ function sample(){return {version:1,settings:{name:'Northstar Studio',currency:'
 const text=(v,max=24000)=>typeof v==='string'&&v.length<=max;
 const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 const plain=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
-const date=v=>v===''||(typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v+'T00:00:00.000Z'))&&new Date(v+'T00:00:00.000Z').toISOString().slice(0,10)===v);
+function date(v){
+ if(v==='')return true;
+ if(typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;
+ const y=+v.slice(0,4),m=+v.slice(5,7),d=+v.slice(8,10);
+ if(m<1||m>12||d<1)return false;
+ return d<=(m===2?((y%4===0&&(y%100!==0||y%400===0))?29:28):(m===4||m===6||m===9||m===11?30:31));
+}
 const absent=v=>v===undefined||v===null||v==='';
 const ruleId=v=>typeof v==='string'&&/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(v);
 function validateRuleIds(ids){if(!Array.isArray(ids)||ids.length>200||ids.some(id=>!ruleId(id))||new Set(ids).size!==ids.length)throw Error('Invalid rule identifiers.');}

@@ -11,14 +11,23 @@ const id=v=>typeof v==='string'&&/^[A-Za-z0-9_-]{1,100}$/.test(v);
 const absent=v=>v===undefined||v===null||v==='';
 const integer=(v,max=Number.MAX_SAFE_INTEGER)=>Number.isSafeInteger(v)&&v>=0&&v<=max;
 function decimal(v,max=1000000){
- return typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=max&&/^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/.test(String(v));
+ if(typeof v!=='number'||!Number.isFinite(v)||v<0||v>max)return false;
+ return Number.isInteger(v)||/^(?:0|[1-9]\d*)\.\d{1,3}$/.test(String(v));
 }
 function date(v,optional=false){
  if(optional&&v==='')return true;
  if(typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;
- const d=new Date(v+'T00:00:00.000Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===v;
+ const y=+v.slice(0,4),m=+v.slice(5,7),d=+v.slice(8,10);
+ if(m<1||m>12||d<1)return false;
+ const max=m===2?((y%4===0&&(y%100!==0||y%400===0))?29:28):(m===4||m===6||m===9||m===11?30:31);
+ return d<=max;
 }
-function timestamp(v){return typeof v==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v)&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString()===v;}
+function timestamp(v){
+ if(typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v))return false;
+ if(!date(v.slice(0,10)))return false;
+ const hh=+v.slice(11,13),mm=+v.slice(14,16),ss=+v.slice(17,19);
+ return hh<=23&&mm<=59&&ss<=59;
+}
 function emptyOperations(){return Object.fromEntries(COLLECTIONS.map(k=>[k,[]]));}
 function normalize(state){
  if(!object(state))fail('Invalid workspace.');
@@ -37,6 +46,13 @@ function formatMinor(amount,currency){
  const value=BigInt(amount);return String(value/100n)+'.'+String(value%100n).padStart(2,'0')+' '+currency;
 }
 const records=(s,k)=>s.operations?.[k]||[];
+const MAX_SAFE_BIG=BigInt(Number.MAX_SAFE_INTEGER);
+function addSafeBig(acc,currency,amount){
+ const next=acc[currency]+BigInt(amount);
+ if(next>MAX_SAFE_BIG)fail('Monetary total exceeds safe range.');
+ acc[currency]=next;
+}
+const zeroCurrencyBig=()=>({BDT:0n,USD:0n,EUR:0n,GBP:0n});
 function validate(state){
  if(!object(state))fail('Invalid workspace.');
  for(const k of BASE)if(!Array.isArray(state[k]))fail('Invalid base workspace records.');
@@ -45,16 +61,21 @@ function validate(state){
  for(const k of Object.keys(ops))if(!COLLECTIONS.includes(k))fail('Unsupported operations collection: '+k+'.');
  for(const k of COLLECTIONS)if(own(ops,k)&&(!Array.isArray(ops[k])||ops[k].length>5000))fail('Invalid '+k+' records.');
  const ids=new Set();
- for(const k of [...BASE,...COLLECTIONS])for(const r of BASE.includes(k)?state[k]:(ops[k]||[])){
-  if(!object(r)||!id(r.id)||ids.has(r.id))fail('Invalid or duplicate record ID.');
-  ids.add(r.id);
+ for(const k of BASE){
+  const list=state[k];
+  for(let i=0;i<list.length;i++){const r=list[i];if(!object(r)||!id(r.id)||ids.has(r.id))fail('Invalid or duplicate record ID.');ids.add(r.id);}
  }
- const map=k=>new Map((BASE.includes(k)?state[k]:(ops[k]||[])).map(r=>[r.id,r]));
+ for(const k of COLLECTIONS){
+  const list=ops[k]||[];
+  for(let i=0;i<list.length;i++){const r=list[i];if(!object(r)||!id(r.id)||ids.has(r.id))fail('Invalid or duplicate record ID.');ids.add(r.id);}
+ }
+ const map=k=>{const m=new Map(),list=BASE.includes(k)?state[k]:(ops[k]||[]);for(let i=0;i<list.length;i++)m.set(list[i].id,list[i]);return m;};
  const projects=map('projects'),clients=map('clients'),tasks=map('tasks'),changes=map('changes'),teams=map('team'),sprints=map('sprints'),opportunities=map('opportunities');
  const project=(r,label)=>{if(!projects.has(r.projectId))fail('Invalid '+label+' project reference.');};
  const ref=(v,m,label)=>{if(!absent(v)&&!m.has(v))fail('Invalid '+label+' reference.');};
  const projectRef=(r,v,m,label)=>{ref(v,m,label);if(!absent(v)&&m.get(v).projectId!==r.projectId)fail('Cross-project '+label+' reference.');};
  const monetary=(r,label)=>{if(!CURRENCIES.includes(r.currency))fail('Invalid '+label+' currency.');};
+ const estSums=zeroCurrencyBig(),invSums=zeroCurrencyBig(),propSums=zeroCurrencyBig(),oppSums=zeroCurrencyBig(),planSums=zeroCurrencyBig(),budgetSums=zeroCurrencyBig(),actLaborSums=zeroCurrencyBig(),actExpSums=zeroCurrencyBig();
  for(const r of ops.team||[]){costSnapshot(r,'team');if(!required(r.name,120)||!string(r.role,120)||!string(r.email,200)||!decimal(r.capacityHours,168)||typeof r.active!=='boolean')fail('Invalid team record.');}
  for(const r of ops.sprints||[]){
   project(r,'sprint');
@@ -76,16 +97,17 @@ function validate(state){
   costSnapshot(r,'time entry');
   project(r,'time entry');projectRef(r,r.taskId,tasks,'time entry task');ref(r.teamId,teams,'time entry team');
   if(!date(r.date)||!integer(r.durationMinutes,1440)||r.durationMinutes===0||!string(r.note,4000))fail('Invalid time entry duration, date, or note.');
+  if(r.costRateMinor!==undefined&&r.costRateMinor!==null)addSafeBig(actLaborSums,r.costCurrency,minuteCost(r.durationMinutes,r.costRateMinor));
  }
  for(const r of ops.estimates||[]){
   project(r,'estimate');monetary(r,'estimate');
   if(!required(r.name)||!decimal(r.hours)||!integer(r.rateMinor,1000000000000)||!['Draft','Proposed','Accepted'].includes(r.status)||!string(r.notes)||!timestamp(r.createdAt))fail('Invalid estimate record.');
-  estimateTotal(r);
+  addSafeBig(estSums,r.currency,estimateTotal(r));
  }
  for(const r of ops.invoices||[]){
   project(r,'invoice');monetary(r,'invoice');
   if(!required(r.number,100)||r.status!=='Draft'||!date(r.issuedDate)||!date(r.dueDate,true)||(r.dueDate&&r.dueDate<r.issuedDate)||!string(r.notes)||!timestamp(r.createdAt))fail('Invalid invoice draft.');
-  invoiceTotal(r);
+  addSafeBig(invSums,r.currency,invoiceTotal(r));
  }
  for(const r of ops.versions||[]){
   project(r,'version');projectRef(r,r.changeId,changes,'version change');
@@ -99,6 +121,7 @@ function validate(state){
  for(const r of ops.opportunities||[]){
   clientProject(r,'opportunity');monetary(r,'opportunity');
   if(!required(r.name)||!['Lead','Qualified','Proposal','Won','Lost'].includes(r.stage)||!integer(r.valueMinor,1000000000000)||!string(r.notes)||!string(r.nextStep,4000)||!timestamp(r.createdAt))fail('Invalid opportunity record.');
+  addSafeBig(oppSums,r.currency,r.valueMinor);
  }
  for(const r of ops.proposals||[]){
   clientProject(r,'proposal');monetary(r,'proposal');ref(r.opportunityId,opportunities,'proposal opportunity');
@@ -107,7 +130,7 @@ function validate(state){
    if(opportunity.clientId!==r.clientId||(!absent(r.projectId)&&!absent(opportunity.projectId)&&opportunity.projectId!==r.projectId))fail('Mismatched proposal opportunity reference.');
   }
   if(!required(r.title)||!string(r.scope)||!['Draft','Sent','Accepted','Declined'].includes(r.status)||!date(r.validUntil,true)||!string(r.notes)||!timestamp(r.createdAt))fail('Invalid proposal record.');
-  proposalTotal(r);
+  addSafeBig(propSums,r.currency,proposalTotal(r));
  }
  const plannedProjects=new Set();
  for(const r of ops.costPlans||[]){
@@ -115,37 +138,33 @@ function validate(state){
   if(plannedProjects.has(r.projectId))fail('Only one cost plan is allowed per project.');
   plannedProjects.add(r.projectId);
   if(!required(r.name)||!string(r.notes)||!timestamp(r.createdAt)||(own(r,'budgetMinor')&&r.budgetMinor!==null&&!integer(r.budgetMinor)))fail('Invalid cost plan record or internal budget.');
-  costPlanParts(r);
+  const parts=costPlanParts(r);
+  addSafeBig(planSums,r.currency,parts.knownMinor);
+  if(r.budgetMinor!==undefined&&r.budgetMinor!==null)addSafeBig(budgetSums,r.currency,r.budgetMinor);
   for(const line of r.laborLines){projectRef(r,line.taskId,tasks,'cost plan task');ref(line.teamId,teams,'cost plan team');}
  }
  for(const r of ops.expenses||[]){
   project(r,'expense');monetary(r,'expense');
   if(!required(r.description,1000)||!['Hosting','Software','Contractor','Travel','Other'].includes(r.category)||!date(r.date)||!integer(r.amountMinor)||!string(r.notes))fail('Invalid actual expense record.');
+  addSafeBig(actExpSums,r.currency,r.amountMinor);
  }
- // Reject workspaces whose aggregated currency totals cannot be represented safely.
- for(const currency of CURRENCIES){
-  sumMinor((ops.estimates||[]).filter(r=>r.currency===currency).map(estimateTotal));
-  sumMinor((ops.invoices||[]).filter(r=>r.currency===currency).map(invoiceTotal));
-  sumMinor((ops.proposals||[]).filter(r=>r.currency===currency).map(proposalTotal));
-  sumMinor((ops.opportunities||[]).filter(r=>r.currency===currency).map(r=>r.valueMinor));
-  sumMinor((ops.costPlans||[]).filter(r=>r.currency===currency).map(costPlanTotal));
-  sumMinor((ops.costPlans||[]).filter(r=>r.currency===currency&&r.budgetMinor!==undefined&&r.budgetMinor!==null).map(r=>r.budgetMinor));
-
+ for(const c of CURRENCIES){
+  if(actLaborSums[c]+actExpSums[c]>MAX_SAFE_BIG)fail('Monetary total exceeds safe range.');
  }
- actualCurrencyTotals(state);
  return state;
 }
 function multiplyMinor(qty,rateMinor){
  if(!decimal(qty)||!integer(rateMinor,1000000000000))fail('Invalid quantity or monetary rate.');
- const parts=String(qty).split('.'),scale=10n**BigInt((parts[1]||'').length);
- const numerator=BigInt(parts[0]+(parts[1]||''))*BigInt(rateMinor),rounded=(numerator+scale/2n)/scale;
- if(rounded>BigInt(Number.MAX_SAFE_INTEGER))fail('Monetary amount exceeds safe range.');
+ const milli=Math.round(qty*1000);
+ if(milli*rateMinor<=9000000000000000)return Math.floor((milli*rateMinor+500)/1000);
+ const rounded=(BigInt(milli)*BigInt(rateMinor)+500n)/1000n;
+ if(rounded>MAX_SAFE_BIG)fail('Monetary amount exceeds safe range.');
  return Number(rounded);
 }
 function sumMinor(values){
  let total=0n;
  for(const value of values){if(!integer(value))fail('Invalid monetary amount.');total+=BigInt(value);}
- if(total>BigInt(Number.MAX_SAFE_INTEGER))fail('Monetary total exceeds safe range.');
+ if(total>MAX_SAFE_BIG)fail('Monetary total exceeds safe range.');
  return Number(total);
 }
 function lineTotal(line){
@@ -157,60 +176,103 @@ function invoiceTotal(invoice){
  return sumMinor(invoice.lines.map(lineTotal));
 }
 const proposalTotal=proposal=>invoiceTotal(proposal),estimateTotal=e=>multiplyMinor(e.hours,e.rateMinor),hours=v=>Math.round(v*1000)/1000;
+function groupBy(list,keyFn){
+ const m=new Map();
+ for(let i=0;i<list.length;i++){
+  const item=list[i],k=keyFn(item);
+  if(absent(k))continue;
+  let arr=m.get(k);if(!arr){arr=[];m.set(k,arr);}
+  arr.push(item);
+ }
+ return m;
+}
 function summarize(state,options={}){
  validate(state);
  const reportDate=options.today||today(options.timeZone||'Asia/Dhaka');if(!date(reportDate))fail('Invalid report date.');
  const currency=CURRENCIES.includes(state.settings?.currency)?state.settings.currency:'BDT',get=k=>records(state,k);
- const currencyTotals=c=>({
-  currency:c,
-  estimatedMinor:sumMinor(get('estimates').filter(r=>r.currency===c).map(estimateTotal)),
-  acceptedEstimateMinor:sumMinor(get('estimates').filter(r=>r.currency===c&&r.status==='Accepted').map(estimateTotal)),
-  invoiceMinor:sumMinor(get('invoices').filter(r=>r.currency===c).map(invoiceTotal)),
-  proposalMinor:sumMinor(get('proposals').filter(r=>r.currency===c&&r.status!=='Declined').map(proposalTotal)),
-  pipelineMinor:sumMinor(get('opportunities').filter(r=>r.currency===c&&!['Won','Lost'].includes(r.stage)).map(r=>r.valueMinor))
+ const tasks=state.tasks,sprints=get('sprints'),milestones=get('milestones'),issues=get('issues'),team=get('team'),timeEntries=get('timeEntries'),estimates=get('estimates'),invoices=get('invoices'),proposals=get('proposals'),opportunities=get('opportunities');
+ const curMap=new Map(CURRENCIES.map(c=>[c,{currency:c,estimatedMinor:0n,acceptedEstimateMinor:0n,invoiceMinor:0n,proposalMinor:0n,pipelineMinor:0n}]));
+ let totalEstimatedHours=0;
+ for(let i=0;i<estimates.length;i++){
+  const r=estimates[i],tot=BigInt(estimateTotal(r)),b=curMap.get(r.currency);
+  totalEstimatedHours+=r.hours;
+  b.estimatedMinor+=tot;
+  if(r.status==='Accepted')b.acceptedEstimateMinor+=tot;
+ }
+ for(let i=0;i<invoices.length;i++){const r=invoices[i];curMap.get(r.currency).invoiceMinor+=BigInt(invoiceTotal(r));}
+ for(let i=0;i<proposals.length;i++){const r=proposals[i];if(r.status!=='Declined')curMap.get(r.currency).proposalMinor+=BigInt(proposalTotal(r));}
+ for(let i=0;i<opportunities.length;i++){const r=opportunities[i];if(r.stage!=='Won'&&r.stage!=='Lost')curMap.get(r.currency).pipelineMinor+=BigInt(r.valueMinor);}
+ const byCurrency=CURRENCIES.map(c=>{
+  const b=curMap.get(c);
+  for(const k of ['estimatedMinor','acceptedEstimateMinor','invoiceMinor','proposalMinor','pipelineMinor'])if(b[k]>MAX_SAFE_BIG)fail('Monetary total exceeds safe range.');
+  return {currency:c,estimatedMinor:Number(b.estimatedMinor),acceptedEstimateMinor:Number(b.acceptedEstimateMinor),invoiceMinor:Number(b.invoiceMinor),proposalMinor:Number(b.proposalMinor),pipelineMinor:Number(b.pipelineMinor)};
  });
+ const selectedCurrencyTotals=byCurrency.find(c=>c.currency===currency);
+ let doneTasksTotal=0,activeSprintsTotal=0,overdueMilestonesTotal=0,openIssuesTotal=0,criticalIssuesTotal=0,activeTeamTotal=0,loggedMinutesTotal=0;
+ for(let i=0;i<tasks.length;i++)if(tasks[i].status==='Done')doneTasksTotal++;
+ for(let i=0;i<sprints.length;i++)if(sprints[i].status==='Active')activeSprintsTotal++;
+ for(let i=0;i<milestones.length;i++)if(milestones[i].status!=='Reached'&&milestones[i].due&&milestones[i].due<reportDate)overdueMilestonesTotal++;
+ for(let i=0;i<issues.length;i++)if(issues[i].status!=='Resolved'){openIssuesTotal++;if(issues[i].severity==='Critical')criticalIssuesTotal++;}
+ for(let i=0;i<team.length;i++)if(team[i].active)activeTeamTotal++;
+ for(let i=0;i<timeEntries.length;i++)loggedMinutesTotal+=timeEntries[i].durationMinutes;
  const summary={
-  projectCount:state.projects.length,clientCount:state.clients.length,taskCount:state.tasks.length,
-  doneTasks:state.tasks.filter(t=>t.status==='Done').length,openTasks:state.tasks.filter(t=>t.status!=='Done').length,
-  activeSprints:get('sprints').filter(r=>r.status==='Active').length,
-  overdueMilestones:get('milestones').filter(r=>r.status!=='Reached'&&r.due&&r.due<reportDate).length,
-  openIssues:get('issues').filter(r=>r.status!=='Resolved').length,
-  criticalIssues:get('issues').filter(r=>r.status!=='Resolved'&&r.severity==='Critical').length,
-  teamCount:get('team').filter(r=>r.active).length,
-  loggedMinutes:get('timeEntries').reduce((n,r)=>n+r.durationMinutes,0),
-  estimatedHours:hours(get('estimates').reduce((n,r)=>n+r.hours,0)),
-  ...currencyTotals(currency),byCurrency:CURRENCIES.map(currencyTotals),
-  completionPercent:state.tasks.length?Math.round(100*state.tasks.filter(t=>t.status==='Done').length/state.tasks.length):0,
+  projectCount:state.projects.length,clientCount:state.clients.length,taskCount:tasks.length,
+  doneTasks:doneTasksTotal,openTasks:tasks.length-doneTasksTotal,
+  activeSprints:activeSprintsTotal,overdueMilestones:overdueMilestonesTotal,
+  openIssues:openIssuesTotal,criticalIssues:criticalIssuesTotal,
+  teamCount:activeTeamTotal,loggedMinutes:loggedMinutesTotal,
+  estimatedHours:hours(totalEstimatedHours),
+  ...selectedCurrencyTotals,byCurrency,
+  completionPercent:tasks.length?Math.round(100*doneTasksTotal/tasks.length):0,
   byProject:[],byTeam:[],alerts:[]
  };
+ const tasksByProject=groupBy(tasks,t=>t.projectId),esByProject=groupBy(estimates,r=>r.projectId),msByProject=groupBy(milestones,r=>r.projectId),issuesByProject=groupBy(issues,r=>r.projectId),timeByProject=groupBy(timeEntries,r=>r.projectId),invByProject=groupBy(invoices,r=>r.projectId),sprintsByProject=groupBy(sprints,r=>r.projectId);
+ const tasksByAssignee=groupBy(tasks,t=>t.assigneeId),timeByTeam=groupBy(timeEntries,t=>t.teamId);
  const alert=(type,projectId,title,detail)=>summary.alerts.push({id:'alert-'+summary.alerts.length,type,projectId,title,detail});
- for(const p of state.projects){
-  const ts=state.tasks.filter(t=>t.projectId===p.id),es=get('estimates').filter(r=>r.projectId===p.id),ms=get('milestones').filter(r=>r.projectId===p.id),issues=get('issues').filter(r=>r.projectId===p.id&&r.status!=='Resolved');
+ const hasTeam=team.length>0;
+ for(let i=0;i<state.projects.length;i++){
+  const p=state.projects[i],pid=p.id;
+  const ts=tasksByProject.get(pid)||[],es=esByProject.get(pid)||[],ms=msByProject.get(pid)||[],pIssues=issuesByProject.get(pid)||[],pTime=timeByProject.get(pid)||[],pInv=invByProject.get(pid)||[],pSprints=sprintsByProject.get(pid)||[];
+  let pDone=0,pPlannedHrs=0,pRemHrs=0,pUnassigned=0;
+  for(let j=0;j<ts.length;j++){
+   const t=ts[j],eh=t.estimatedHours||0;pPlannedHrs+=eh;
+   if(t.status==='Done')pDone++;
+   else{pRemHrs+=eh;if(absent(t.assigneeId))pUnassigned++;}
+  }
+  let pAcceptedHrs=0,pEstMinor=0n,pAccEstMinor=0n;
+  for(let j=0;j<es.length;j++){
+   const e=es[j], matchesCur=e.currency===currency, tot=matchesCur?BigInt(estimateTotal(e)):0n;
+   if(matchesCur)pEstMinor+=tot;
+   if(e.status==='Accepted'){pAcceptedHrs+=e.hours;if(matchesCur)pAccEstMinor+=tot;}
+  }
+  let pLoggedMin=0;for(let j=0;j<pTime.length;j++)pLoggedMin+=pTime[j].durationMinutes;
+  let pInvMinor=0n;for(let j=0;j<pInv.length;j++)if(pInv[j].currency===currency)pInvMinor+=BigInt(invoiceTotal(pInv[j]));
+  let pOpenIssues=0,pCritIssues=0;for(let j=0;j<pIssues.length;j++)if(pIssues[j].status!=='Resolved'){pOpenIssues++;if(pIssues[j].severity==='Critical')pCritIssues++;}
+  let pOverdueMs=0;for(let j=0;j<ms.length;j++)if(ms[j].status!=='Reached'&&ms[j].due&&ms[j].due<reportDate)pOverdueMs++;
+  let pActiveSprints=0;for(let j=0;j<pSprints.length;j++)if(pSprints[j].status==='Active')pActiveSprints++;
   const row={
-   projectId:p.id,currency,taskCount:ts.length,doneTasks:ts.filter(t=>t.status==='Done').length,openTasks:ts.filter(t=>t.status!=='Done').length,
-   plannedHours:hours(ts.reduce((n,r)=>n+(r.estimatedHours||0),0)),remainingHours:hours(ts.filter(t=>t.status!=='Done').reduce((n,r)=>n+(r.estimatedHours||0),0)),
-   acceptedHours:hours(es.filter(r=>r.status==='Accepted').reduce((n,r)=>n+r.hours,0)),
-   loggedMinutes:get('timeEntries').filter(r=>r.projectId===p.id).reduce((n,r)=>n+r.durationMinutes,0),
-   estimatedMinor:sumMinor(es.filter(r=>r.currency===currency).map(estimateTotal)),
-   acceptedEstimateMinor:sumMinor(es.filter(r=>r.currency===currency&&r.status==='Accepted').map(estimateTotal)),
-   invoiceMinor:sumMinor(get('invoices').filter(r=>r.projectId===p.id&&r.currency===currency).map(invoiceTotal)),
-   openIssues:issues.length,criticalIssues:issues.filter(r=>r.severity==='Critical').length,
-   overdueMilestones:ms.filter(r=>r.status!=='Reached'&&r.due&&r.due<reportDate).length,
-   unassignedTasks:ts.filter(t=>t.status!=='Done'&&absent(t.assigneeId)).length,
-   activeSprints:get('sprints').filter(r=>r.projectId===p.id&&r.status==='Active').length,
-   completionPercent:ts.length?Math.round(100*ts.filter(t=>t.status==='Done').length/ts.length):0
+   projectId:pid,currency,taskCount:ts.length,doneTasks:pDone,openTasks:ts.length-pDone,
+   plannedHours:hours(pPlannedHrs),remainingHours:hours(pRemHrs),
+   acceptedHours:hours(pAcceptedHrs),loggedMinutes:pLoggedMin,
+   estimatedMinor:Number(pEstMinor),acceptedEstimateMinor:Number(pAccEstMinor),invoiceMinor:Number(pInvMinor),
+   openIssues:pOpenIssues,criticalIssues:pCritIssues,overdueMilestones:pOverdueMs,
+   unassignedTasks:pUnassigned,activeSprints:pActiveSprints,
+   completionPercent:ts.length?Math.round(100*pDone/ts.length):0
   };
   summary.byProject.push(row);
-  if(row.overdueMilestones)alert('warning',p.id,'Milestone overdue',row.overdueMilestones+' unfinished milestone(s) passed their due date.');
-  if(row.criticalIssues)alert('warning',p.id,'Critical issues need triage',row.criticalIssues+' unresolved critical issue(s).');
-  if(row.acceptedHours>0&&row.plannedHours>row.acceptedHours)alert('warning',p.id,'Planned hours exceed accepted estimate',row.plannedHours+' planned hours against '+row.acceptedHours+' accepted hours.');
-  if(row.acceptedHours>0&&row.loggedMinutes/60>row.acceptedHours)alert('warning',p.id,'Logged time exceeds accepted estimate',hours(row.loggedMinutes/60)+' logged hours against '+row.acceptedHours+' accepted hours.');
-  if(row.unassignedTasks&&get('team').length)alert('info',p.id,'Assign remaining work',row.unassignedTasks+' open task(s) have no assigned person.');
-  if(row.acceptedEstimateMinor>0&&row.invoiceMinor>row.acceptedEstimateMinor)alert('warning',p.id,'Invoice drafts exceed accepted estimate','Draft invoice totals in '+currency+' exceed accepted estimates; review scope and billing.');
+  if(row.overdueMilestones)alert('warning',pid,'Milestone overdue',row.overdueMilestones+' unfinished milestone(s) passed their due date.');
+  if(row.criticalIssues)alert('warning',pid,'Critical issues need triage',row.criticalIssues+' unresolved critical issue(s).');
+  if(row.acceptedHours>0&&row.plannedHours>row.acceptedHours)alert('warning',pid,'Planned hours exceed accepted estimate',row.plannedHours+' planned hours against '+row.acceptedHours+' accepted hours.');
+  if(row.acceptedHours>0&&row.loggedMinutes/60>row.acceptedHours)alert('warning',pid,'Logged time exceeds accepted estimate',hours(row.loggedMinutes/60)+' logged hours against '+row.acceptedHours+' accepted hours.');
+  if(row.unassignedTasks&&hasTeam)alert('info',pid,'Assign remaining work',row.unassignedTasks+' open task(s) have no assigned person.');
+  if(row.acceptedEstimateMinor>0&&row.invoiceMinor>row.acceptedEstimateMinor)alert('warning',pid,'Invoice drafts exceed accepted estimate','Draft invoice totals in '+currency+' exceed accepted estimates; review scope and billing.');
  }
- for(const person of get('team')){
-  const ts=state.tasks.filter(t=>t.assigneeId===person.id),open=ts.filter(t=>t.status!=='Done');
-  const row={teamId:person.id,assignedTasks:ts.length,openTasks:open.length,estimatedHours:hours(open.reduce((n,t)=>n+(t.estimatedHours||0),0)),capacityHours:person.capacityHours,loggedMinutes:get('timeEntries').filter(t=>t.teamId===person.id).reduce((n,t)=>n+t.durationMinutes,0)};
+ for(let i=0;i<team.length;i++){
+  const person=team[i],ts=tasksByAssignee.get(person.id)||[],pTime=timeByTeam.get(person.id)||[];
+  let openCount=0,estHrs=0,loggedMin=0;
+  for(let j=0;j<ts.length;j++)if(ts[j].status!=='Done'){openCount++;estHrs+=ts[j].estimatedHours||0;}
+  for(let j=0;j<pTime.length;j++)loggedMin+=pTime[j].durationMinutes;
+  const row={teamId:person.id,assignedTasks:ts.length,openTasks:openCount,estimatedHours:hours(estHrs),capacityHours:person.capacityHours,loggedMinutes:loggedMin};
   row.loadPercent=person.capacityHours?Math.round(100*row.estimatedHours/person.capacityHours):null;summary.byTeam.push(row);
   if(person.active&&row.estimatedHours>person.capacityHours)alert('info',null,'Review '+person.name+"'s workload",row.estimatedHours+' open estimated hours compared with '+person.capacityHours+' weekly capacity. This is a planning comparison, not a scheduled-week forecast.');
  }
@@ -225,9 +287,7 @@ function costSnapshot(r,label){
 }
 function minuteCost(durationMinutes,rateMinor){
  if(!integer(durationMinutes,1440)||!integer(rateMinor,1000000000000))fail('Invalid cost minutes or rate.');
- const total=(BigInt(durationMinutes)*BigInt(rateMinor)+30n)/60n;
- if(total>BigInt(Number.MAX_SAFE_INTEGER))fail('Monetary amount exceeds safe range.');
- return Number(total);
+ return Math.floor((durationMinutes*rateMinor+30)/60);
 }
 function costPlanParts(plan){
  if(!object(plan)||!Array.isArray(plan.laborLines)||plan.laborLines.length>100||!Array.isArray(plan.expenseLines)||plan.expenseLines.length>100)fail('Invalid cost plan line arrays.');
@@ -243,12 +303,30 @@ function costPlanParts(plan){
 }
 const costPlanTotal=plan=>costPlanParts(plan).knownMinor;
 function actualCurrencyTotals(state){
+ const acc=new Map(CURRENCIES.map(c=>[c,{labor:0n,expense:0n,pricedMinutes:0,entryCount:0,expenseCount:0}]));
+ const times=records(state,'timeEntries'),expenses=records(state,'expenses');
+ for(let i=0;i<times.length;i++){
+  const r=times[i];
+  if(r.costRateMinor!==undefined&&r.costRateMinor!==null&&acc.has(r.costCurrency)){
+   const b=acc.get(r.costCurrency);
+   b.labor+=BigInt(minuteCost(r.durationMinutes,r.costRateMinor));
+   if(b.labor>MAX_SAFE_BIG)fail('Monetary total exceeds safe range.');
+   b.pricedMinutes+=r.durationMinutes;b.entryCount++;
+  }
+ }
+ for(let i=0;i<expenses.length;i++){
+  const r=expenses[i];
+  if(acc.has(r.currency)){
+   const b=acc.get(r.currency);
+   b.expense+=BigInt(r.amountMinor);
+   if(b.expense>MAX_SAFE_BIG)fail('Monetary total exceeds safe range.');
+   b.expenseCount++;
+  }
+ }
  return CURRENCIES.map(currency=>{
-  const time=records(state,'timeEntries').filter(r=>r.costRateMinor!==undefined&&r.costRateMinor!==null&&r.costCurrency===currency);
-  const expenses=records(state,'expenses').filter(r=>r.currency===currency);
-  const laborMinor=sumMinor(time.map(r=>minuteCost(r.durationMinutes,r.costRateMinor)));
-  const expenseMinor=sumMinor(expenses.map(r=>r.amountMinor));
-  return {currency,laborMinor,expenseMinor,knownMinor:sumMinor([laborMinor,expenseMinor]),pricedMinutes:time.reduce((n,r)=>n+r.durationMinutes,0),entryCount:time.length,expenseCount:expenses.length};
+  const b=acc.get(currency),known=b.labor+b.expense;
+  if(known>MAX_SAFE_BIG)fail('Monetary total exceeds safe range.');
+  return {currency,laborMinor:Number(b.labor),expenseMinor:Number(b.expense),knownMinor:Number(known),pricedMinutes:b.pricedMinutes,entryCount:b.entryCount,expenseCount:b.expenseCount};
  });
 }
 function decimalHoursTotal(values){
@@ -290,7 +368,54 @@ function costing(state,projectId){
   planVarianceMinor:plannedComplete&&actualComplete?actualKnownMinor-parts.knownMinor:null,
   laborRows,plannedExpenseRows,timeRows,expenseRows,byCurrency};
 }
-
+function projectInsights(state,options={}){
+ const summary=summarize(state,options);
+ const plansByProject=new Map(records(state,'costPlans').map(p=>[p.projectId,p]));
+ const timesByProject=groupBy(records(state,'timeEntries'),r=>r.projectId);
+ const expensesByProject=groupBy(records(state,'expenses'),r=>r.projectId);
+ const estimatesByProject=groupBy(records(state,'estimates'),r=>r.projectId);
+ const invoicesByProject=groupBy(records(state,'invoices'),r=>r.projectId);
+ return summary.byProject.map(row=>{
+  const pid=row.projectId,plan=plansByProject.get(pid)||null,planCur=plan?.currency||row.currency;
+  const times=timesByProject.get(pid)||[],expenses=expensesByProject.get(pid)||[],es=estimatesByProject.get(pid)||[],invs=invoicesByProject.get(pid)||[];
+  let actualLabor=0n,actualExp=0n,unpricedEntries=0,foreignEntries=0;
+  for(let i=0;i<times.length;i++){
+   const t=times[i];
+   if(t.costRateMinor===undefined||t.costRateMinor===null)unpricedEntries++;
+   else if(t.costCurrency===planCur)actualLabor+=BigInt(minuteCost(t.durationMinutes,t.costRateMinor));
+   else foreignEntries++;
+  }
+  for(let i=0;i<expenses.length;i++){
+   const e=expenses[i];
+   if(e.currency===planCur)actualExp+=BigInt(e.amountMinor);
+   else foreignEntries++;
+  }
+  let acceptedEst=0n,invoiced=0n;
+  for(let i=0;i<es.length;i++)if(es[i].status==='Accepted'&&es[i].currency===planCur)acceptedEst+=BigInt(estimateTotal(es[i]));
+  for(let i=0;i<invs.length;i++)if(invs[i].currency===planCur)invoiced+=BigInt(invoiceTotal(invs[i]));
+  const actualCostMinor=Number(actualLabor+actualExp),acceptedEstimateMinor=Number(acceptedEst),invoiceMinor=Number(invoiced);
+  const actualComplete=Boolean(plan&&unpricedEntries===0&&foreignEntries===0);
+  const plannedParts=plan?costPlanParts(plan):null;
+  const plannedCostMinor=plannedParts?plannedParts.knownMinor:null;
+  const budgetMinor=plan?.budgetMinor??null;
+  const marginMinor=acceptedEstimateMinor>0&&actualComplete?acceptedEstimateMinor-actualCostMinor:null;
+  const marginPercent=marginMinor!==null&&acceptedEstimateMinor>0?Math.round(100*marginMinor/acceptedEstimateMinor):null;
+  const loggedHours=hours(row.loggedMinutes/60);
+  const hourBurnPercent=row.acceptedHours>0?Math.round(100*loggedHours/row.acceptedHours):(row.plannedHours>0?Math.round(100*loggedHours/row.plannedHours):null);
+  const reasons=[];
+  if(row.criticalIssues>0)reasons.push(row.criticalIssues+' critical issue(s)');
+  if(row.overdueMilestones>0)reasons.push(row.overdueMilestones+' overdue milestone(s)');
+  if(budgetMinor!==null&&actualComplete&&actualCostMinor>budgetMinor)reasons.push('Internal budget exceeded');
+  if(marginMinor!==null&&marginMinor<0)reasons.push('Negative delivery margin');
+  if(hourBurnPercent!==null&&hourBurnPercent>100)reasons.push('Hours exceed baseline ('+hourBurnPercent+'%)');
+  const healthStatus=(row.criticalIssues>0||(budgetMinor!==null&&actualComplete&&actualCostMinor>budgetMinor)||(marginMinor!==null&&marginMinor<0))?'Critical':(reasons.length>0||(marginPercent!==null&&marginPercent<20))?'At risk':'Healthy';
+  return {
+   projectId:pid,currency:planCur,hasCostPlan:Boolean(plan),actualComplete,
+   acceptedEstimateMinor,invoiceMinor,plannedCostMinor,actualCostMinor,budgetMinor,
+   marginMinor,marginPercent,plannedHours:row.plannedHours,acceptedHours:row.acceptedHours,loggedHours,hourBurnPercent,burnPercent:hourBurnPercent,healthStatus,health:healthStatus,reasons
+  };
+ });
+}
 const markdown=s=>String(s).replace(/[\\*_{}\[\]()#+.!|]/g,'\\$&').replace(/\x60/g,'\\\x60').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\r?\n/g,' ');
 function exportProject(state,projectId,options={}){
  const summary=summarize(state,options),p=state.projects.find(p=>p.id===projectId);if(!p)fail('Unknown project.');
@@ -309,6 +434,6 @@ function exportProject(state,projectId,options={}){
  section('Planning alerts',summary.alerts.filter(r=>r.projectId===projectId).map(r=>'- '+markdown(r.title)+': '+markdown(r.detail)));
  return lines.join('\n');
 }
-const api={COLLECTIONS,CURRENCIES,uid,stamp,emptyOperations,normalize,validate,summarize,today,formatMinor,multiplyMinor,sumMinor,lineTotal,invoiceTotal,proposalTotal,estimateTotal,minuteCost,costPlanTotal,costing,exportProject};
+const api={COLLECTIONS,CURRENCIES,uid,stamp,emptyOperations,normalize,validate,summarize,projectInsights,today,formatMinor,multiplyMinor,sumMinor,lineTotal,invoiceTotal,proposalTotal,estimateTotal,minuteCost,costPlanTotal,costing,exportProject};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.Ops=api;
 })(globalThis);

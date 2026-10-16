@@ -182,7 +182,7 @@ function createLegacyApp(options={}){
 function emptyWorkspace(name){return Ops.normalize({version:1,settings:{name,currency:'BDT'},clients:[],projects:[],changes:[],tasks:[],activity:[]});}
 function createApp(options={}){
  if(options.authentication===false){if(options.config?.mode==='production'||process.env.NODE_ENV==='production'||process.env.SCOPEWISE_MODE==='production')throw Error('Unauthenticated compatibility mode cannot run in production.');return createLegacyApp(options);}
- const config=options.config||loadConfig(),backend=options.backend||(config.storage==='postgres'?require('./lib/postgres.cjs').createPostgresBackend({databaseUrl:config.databaseUrl,Pool:options.Pool,sessionSecret:config.sessionSecret,maxWorkspaceBytes:(config.maxBodyBytes||8388608)-1024,services:{validateState,emptyWorkspace,ApiError}}):null),auth=options.authStore||backend?.auth||createAuthStore({filename:path.join(config.workDir,'data/auth.sqlite'),sessionSecret:config.sessionSecret});
+ const config=options.config||loadConfig(),backend=options.backend||(config.storage==='postgres'?require('./lib/postgres.cjs').createPostgresBackend({databaseUrl:config.databaseUrl,Pool:options.Pool,sessionSecret:config.sessionSecret,maxWorkspaceBytes:(config.maxBodyBytes||8388608)-1024,services:{validateState,emptyWorkspace,ApiError}}):null),auth=options.authStore||backend?.auth||createAuthStore({filename:path.join(config.workDir,'data/auth.sqlite'),sessionSecret:config.sessionSecret,ApiError});
  const recentLocalAgencies=new Set();let closing=false,inFlightLogins=0;
  const log=options.logger||((event)=>process.stdout.write(JSON.stringify({...event,at:new Date().toISOString()})+'\n'));
  async function tenant(user,authorization){
@@ -285,10 +285,10 @@ function createApp(options={}){
  return {server,handler,auth,config,backend,ready:()=>backend?backend.ready():Promise.resolve(),close:()=>{closing=true;return new Promise((resolve,reject)=>server.close(()=>resourcesClose().then(resolve,reject)));}};
 }
 
+module.exports={createApp,createStore,validateState,validatePlan,ApiError,emptyWorkspace};
 if(require.main===module){
  let app;try{const config=loadConfig();app=createApp({config});app.ready().then(()=>app.server.listen(config.port,config.host,()=>console.log('Scopewise authenticated workspace: '+(config.publicOrigin||'http://127.0.0.1:'+config.port)))).catch(()=>{console.error('Scopewise database startup failed. Verify private settings and schema initialization.');process.exitCode=1;app.close().catch(()=>{});});
  app.server.on('error',error=>{console.error(JSON.stringify({event:'startup_failed',code:error.code||'ERROR'}));app.close().catch(()=>{});process.exitCode=1;});
  for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{const deadline=setTimeout(()=>process.exit(1),10000);deadline.unref();app.close().then(()=>process.exit(0));});
  }catch(error){console.error('Scopewise startup configuration failed: '+error.message);process.exitCode=1;}
 }
-module.exports={createApp,createStore,validateState,validatePlan,ApiError,emptyWorkspace};
