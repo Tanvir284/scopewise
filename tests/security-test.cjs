@@ -110,6 +110,12 @@ try{
  assert.throws(()=>loadConfig({...env,NODE_ENV:'production',SCOPEWISE_MODE:'development'}));assert.throws(()=>createApp({authentication:false,config}),/cannot run in production/);assert.throws(()=>createAuthStore({filename:path.join(ROOT,'outside.sqlite')}),/work/);
  const raw=JSON.stringify(logs);for(const privateValue of [password,secret,proxySecret,o.cookie.split('=')[1],o.token])assert(!raw.includes(privateValue));
  });
+ await group('Agency signup provisions an isolated owner workspace and blocks duplicate usernames',async()=>{
+  const reg=await request('/api/auth/signup','POST',{agencyName:'Signup Studio',username:'signup-owner',password});
+  assert.equal(reg.status,200);assert.equal(reg.data.authenticated,true);assert.equal(reg.data.user.role,'owner');assert.equal(reg.data.user.agency.name,'Signup Studio');
+  const dup=await request('/api/auth/signup','POST',{agencyName:'Another Studio',username:'signup-owner',password});
+  assert.equal(dup.status,409);assert.equal(dup.data.code,'USERNAME_TAKEN');
+ });
  console.log('Security checks: '+passed+' groups passed. Isolated artifacts: '+rel);
 }catch(error){console.error(error.stack);process.exitCode=1}finally{if(edge)await new Promise(r=>edge.close(r));if(app)await app.close();else try{auth.close()}catch{}}
 })();

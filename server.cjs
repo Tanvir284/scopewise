@@ -236,6 +236,25 @@ function createApp(options={}){
     const created=await auth.createSession(user.id,user.credentialVersion);setCookie(res,created.token);log({event:'login',requestId,userId:user.id,agencyId:user.agency.id});
     return json(res,200,{authenticated:true,user:created.user,sessionToken:created.sessionToken,expiresAt:created.expiresAt,idleExpiresAt:created.idleExpiresAt});
    }
+   if(pathname==='/api/auth/signup'&&req.method==='POST'){
+    const body=await readJson(req,4096);rejectPrototypeKeys(body);
+    if(Object.keys(body).some(k=>!['agencyName','username','password'].includes(k))||typeof body.agencyName!=='string'||typeof body.username!=='string'||typeof body.password!=='string')throw new ApiError(400,'INVALID_SIGNUP','Enter an agency name, username, and password.');
+    const agencyName=body.agencyName.trim(),username=body.username.trim().toLowerCase(),password=body.password;
+    if(agencyName.length<2||agencyName.length>120)throw new ApiError(400,'INVALID_AGENCY','Agency name must be between 2 and 120 characters.');
+    if(!/^[a-zA-Z0-9][a-zA-Z0-9._@+-]{2,99}$/.test(username))throw new ApiError(400,'INVALID_USERNAME','Username must be 3–100 letters, numbers, or . _ @ + -.');
+    if(password.length<12||password.length>128||Buffer.byteLength(password)>512)throw new ApiError(400,'INVALID_PASSWORD','Use a password of 12 to 128 characters.');
+    if(!(await auth.checkLoginLimit(username,req.socket.remoteAddress||'unknown'))||inFlightLogins>=4){res.setHeader('Retry-After','900');throw new ApiError(429,'LOGIN_LIMIT','Too many attempts. Try again later.');}
+    inFlightLogins++;let createdUser,agency;try{
+     agency=await auth.createAgency({name:agencyName});
+     createdUser=await auth.createUser({agencyId:agency.id,username,password,role:'owner'});
+    }catch(error){
+     if(/unique|duplicate|already/i.test(String(error?.message||'')))throw new ApiError(409,'USERNAME_TAKEN','That username is already registered. Sign in or choose another username.');
+     throw new ApiError(400,'SIGNUP_FAILED',error?.message||'Could not create agency account.');
+    }finally{inFlightLogins--;}
+    await auth.clearLoginLimit(username);if(rawToken)await auth.revokeSession(rawToken);
+    const created=await auth.createSession(createdUser.id,1);setCookie(res,created.token);log({event:'signup',requestId,userId:createdUser.id,agencyId:agency.id});
+    return json(res,200,{authenticated:true,user:created.user,sessionToken:created.sessionToken,expiresAt:created.expiresAt,idleExpiresAt:created.idleExpiresAt});
+   }
    if(pathname==='/api/auth/logout'&&req.method==='POST'){
     if(!session)throw new ApiError(401,'AUTH_REQUIRED','Sign in to continue.');verifyCSRF(req,session);await auth.revokeSession(rawToken);setCookie(res,'',true);return json(res,200,{authenticated:false});
    }
