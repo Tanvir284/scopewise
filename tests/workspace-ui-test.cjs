@@ -85,5 +85,26 @@ let count=0;async function check(name,fn){await fn();count++;console.log('PASS '
   f.sandbox.OpsUI.estimateDraft({projectId:'project-1',name:'Scope expansion',hours:8,rateMinor:150000,currency:'BDT',notes:'Change order'},f.context);f.form.save();Ops.validate(f.state);
   assert(f.state.operations.estimates.some(est=>est.name==='Scope expansion'&&est.hours===8));
  });
+ await check('all frontend scripts compile cleanly and IntelligenceUI sandbox and policy reset work',()=>{
+  for(const file of fs.readdirSync(path.join(__dirname,'../public')).filter(name=>name.endsWith('.js'))){
+   new vm.Script(source(file),{filename:file});
+  }
+  const f=uiFixture();
+  f.context.mutate=fn=>fn();
+  const RulesEngine=require('../public/rules-engine.js');
+  const IntelligenceUI=require('../public/intelligence.js');
+  f.state.settings.rulePreferences={...RulesEngine.defaults,taskLimit:15,disabledRuleIds:['domain.payments']};
+  const main=new Element('main');
+  IntelligenceUI.render(main,f.context);
+  const testBtn=f.buttons.find(b=>b.textContent==='Test active policy');
+  assert(testBtn,'Test active policy button exists');
+  testBtn.click();
+  assert(main.textContent.includes('Extracted changes:'));
+  const resetBtn=f.buttons.find(b=>b.textContent==='Reset defaults');
+  assert(resetBtn,'Reset defaults button exists when preferences differ from defaults');
+  resetBtn.click();
+  assert.equal(f.state.settings.rulePreferences.taskLimit,RulesEngine.defaults.taskLimit);
+  assert.equal(f.state.settings.rulePreferences.disabledRuleIds.length,0);
+ });
  console.log('Passed '+count+' workspace UI regression scenarios.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
